@@ -98,14 +98,14 @@ Legende: `[ ]` = offen, `[x]` = DONE, `[~]` = teilweise / später verfeinert.
 
 ## 5. Context `presentation` — Grafik & Font (`tb-gfx`)
 
-- [ ] **T5.1** `framebuffer.rs`: ARGB8-Framebuffer, Fill, Rect, Linien, Compositing (alpha)
-- [ ] **T5.2** eigener Bitmap-Font: 5x7-Glyphen (ASCII 32–126) als `.font`-Textquelle,
+- [x] **T5.1** `framebuffer.rs`: ARGB8-Framebuffer, Fill, Rect, Linien, Compositing (alpha)
+- [x] **T5.2** eigener Bitmap-Font: 5x7-Glyphen (ASCII 32–126) als `.font`-Textquelle,
       Integer-Skalierung, `measure(text, size)`, `advance`
-- [ ] **T5.3** PNG-Encoder selbstgebaut: Chunk-Layout, CRC32, Adler-32,
+- [x] **T5.3** PNG-Encoder selbstgebaut: Chunk-Layout, CRC32, Adler-32,
       DEFLATE (stored + fixed Huffman) → gültige PNG-Dateien ohne Dependencies
-- [ ] **T5.4** `Image`-Dekodierung: `<img>`-Platzhalter mit alt-Text + Rahmen
+- [x] **T5.4** `Image`-Dekodierung: `<img>`-Platzhalter mit alt-Text + Rahmen
       (Deko-Bilder stören die Akzeptanz nicht; dokumentiert)
-- [ ] **T5.5** Tests: CRC/Adler bekannter Vektoren, PNG-Signatur + Roundtrip-Check
+- [x] **T5.5** Tests: CRC/Adler bekannter Vektoren, PNG-Signatur + Roundtrip-Check
       mit Python (`zlib`), Font-Metriken, Glyph-Vollständigkeit
 
 ## 6. Context `presentation` — Layout (`tb-layout`)

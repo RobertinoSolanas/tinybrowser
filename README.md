@@ -20,7 +20,8 @@ falsche Art von "tiny".
 | `tb-html` (Tokenizer, TreeBuilder, Entities) | ✅ fertig (taz.de: 2893 Elemente in 3 ms) | 34 |
 | `tb-css` (Parser, Selektoren, Werte, `@media`, `calc/var`) | ✅ fertig (260 KB taz-CSS in 5 ms) | 34 |
 | `tb-style` (UA-Sheet, Matching, Kaskade, `ComputedStyle`) | ✅ fertig (taz.de: 2893 Elemente × 3193 Regeln in 51 ms) | 41 |
-| `tb-layout`, `tb-gfx`, `tb-js`, `tb-dom-bindings`, `tb-browser`, `tiny` | 🚧 als nächstes | — |
+| `tb-gfx` (Framebuffer, 5×7-Bitmap-Font, PNG-Encoder) | ✅ fertig (PNG von PIL unabhängig verifiziert) | 33 |
+| `tb-layout`, `tb-js`, `tb-dom-bindings`, `tb-browser`, `tiny` | 🚧 als nächstes | — |
 
 Der detaillierte Fortschritt steht in [`todolist.md`](todolist.md) (jede Aufgabe
 wird beim Fertigstellen abgehakt).
@@ -152,8 +153,8 @@ render weiter und die Tests prüfen, *welche* und *wie viele* Probleme auftreten
 | CSS-Werte | ✅ fertig: Farben (hex/rgb/hsl/148 Keywords), Lengths (px/em/rem/%/vw/vh/…), `var()`, `calc()`, `min()/max()/clamp()` |
 | Kaskade | ✅ fertig: Spezifität, `!important`, Ursprung, Vererbung, UA-Stylesheet |
 | Layout | 🚧 geplant: Block, Inline (Wortumbruch), Flexbox-light, absolut/fixed, `overflow` |
-| Grafik | 🚧 geplant: Framebuffer, Rect/Border/Text, eigener **PNG-Encoder** (CRC32+Adler32+DEFLATE) |
-| Font | 🚧 geplant: eigener 5×7-Bitmap-Font (ASCII), Integer-Skalierung |
+| Grafik | ✅ fertig: Framebuffer (Alfa-Compositing, Clipping, Striche, Rundungen), eigener **PNG-Encoder** (CRC32 + Adler32 + unser DEFLATE) **und** ein kleiner PNG-Leser für Tests |
+| Font | ✅ fertig: hand gezeichneter 5×7-Bitmap-Font (ASCII 32–126 + äöüß € – — … “ ” •), Integer-Skalierung, fett/kursiv synthetisch |
 | DEFLATE/gzip/zlib | ✅ fertig: Encoder **und** Decoder (RFC-1951/1950/1952, python-zlib-Kreuztest) |
 | HTTP/1.1 | ✅ fertig: Request/Response, HeaderMap, Chunked, Redirects, Cookies, Cache, `data:`-URLs |
 | URL | ✅ fertig: RFC-3986 + WHATWG-Relativreferenzen (`//host`, `?q`, `#f`) |
@@ -178,7 +179,7 @@ render weiter und die Tests prüfen, *welche* und *wie viele* Probleme auftreten
 * **JUnit**: `cargo junit` (xtask) erzeugt `target/junit.xml` mit einer
   `<testsuite>` pro Test-Target, inkl. stdout/stderr und Failure-Messages.
 
-Aktueller Stand — **211 Tests, 0 Fehler** (`cargo test --workspace`):
+Aktueller Stand — **244 Tests, 0 Fehler** (`cargo test --workspace`):
 
 ```console
 test result: ok. 30 passed   tb-core      (Geometrie, Farbe, DEFLATE/gzip ± python-Kreuztest)
@@ -188,6 +189,7 @@ test result: ok. 11 passed   tb-dom       (Arena, Traversal, Serializer)
 test result: ok. 34 passed   tb-html      (Tokenizer, TreeBuilder, Fuzz ohne Panics)
 test result: ok. 34 passed   tb-css       (Werte, Selektoren, @media, Nesting, @scsssope-Müll)
 test result: ok. 41 passed   tb-style     (Matcher, Kaskade, var/calc, UA-Sheet, taz-Fixtures)
+test result: ok. 33 passed   tb-gfx       (Framebuffer, Font, PNG round-trip, CRC/Adler-Vektoren)
 test result: ok.  2 passed   tb-testkit
 ```
 
@@ -224,6 +226,13 @@ finally`, `throw`, `for`/`for-in`/`for-of`/`while`/`switch`, `class` (Basis),
 Getter/Setter, Template-Literals, Spread/Rest, Destructuring (Basis),
 `Promise`+Microtask-Queue, `async/await`, `setTimeout`, `console.*`, `JSON`,
 `Math`, `Date`, `RegExp` (Basis).
+
+**Grafik (✅ fertig):** ARGB-Framebuffer mit Alpha-Compositing und Clipping pro
+Aufruf, Rect-/Linien-/Rundungsfüllung, solide/gestrichelte/gepunktete Ränder,
+Bitmap-Text (5×7, Integer-Skal 1–6, synthetisch fett & schräg, Unterstreichen/
+Durchstreichen), `<img>`-Platzhalter mit Berg-und-Sonne-Glyph plus `alt`-Text,
+PNG-Encoder (Signatur, `IHDR`, `tEXt`, `IDAT`, `IEND`) — das Ergebnis wird von
+Pythons `zlib` **und** PIL sauber gelesen.
 
 **Layout (🚧 geplant):** Block, Inline mit Wortumbruch, `inline-block`, Flexbox (row/column,
 wrap, grow/shrink/basis, `justify-content`, `align-items`, `gap`),
