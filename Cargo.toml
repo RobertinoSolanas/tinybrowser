@@ -1,0 +1,57 @@
+[workspace]
+resolver = "2"
+members = [
+    "crates/tb-core",
+    "crates/tb-net",
+    "crates/tb-dom",
+    "crates/tb-html",
+    "crates/tb-css",
+    "crates/tb-style",
+    "crates/tb-gfx",
+    "crates/tb-layout",
+    "crates/tb-js",
+    "crates/tb-dom-bindings",
+    "crates/tb-browser",
+    "crates/tb-testkit",
+    "crates/tb-cli",
+    "tools/xtask",
+]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.75"
+license = "MIT OR Apache-2.0"
+authors = ["tinybrowser authors"]
+repository = "https://example.invalid/tinybrowser"
+
+[workspace.dependencies]
+tb-core = { path = "crates/tb-core" }
+tb-net = { path = "crates/tb-net" }
+tb-dom = { path = "crates/tb-dom" }
+tb-html = { path = "crates/tb-html" }
+tb-css = { path = "crates/tb-css" }
+tb-style = { path = "crates/tb-style" }
+tb-gfx = { path = "crates/tb-gfx" }
+tb-layout = { path = "crates/tb-layout" }
+tb-js = { path = "crates/tb-js" }
+tb-dom-bindings = { path = "crates/tb-dom-bindings" }
+tb-browser = { path = "crates/tb-browser" }
+tb-testkit = { path = "crates/tb-testkit" }
+
+# The ONLY third-party dependencies of the whole browser: TLS + roots.
+# Everything else (HTTP/1.1, URL, HTML, CSS, JS, layout, rasterizer, PNG,
+# bitmap font, test server) is implemented from scratch in this workspace.
+rustls = { version = "0.23", default-features = false, features = [
+    "ring",
+    "std",
+    "tls12",
+] }
+webpki-roots = "0.26"
+
+[profile.dev]
+opt-level = 1
+
+[profile.release]
+opt-level = 3
+lto = "thin"

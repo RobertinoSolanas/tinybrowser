@@ -1,0 +1,17 @@
+[package]
+name = "tb-dom-bindings"
+description = "tinybrowser: JS <-> DOM bindings (window, document, elements, events, storage)"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+
+[dependencies]
+tb-core.workspace = true
+tb-dom.workspace = true
+tb-html.workspace = true
+tb-style.workspace = true
+tb-layout.workspace = true
+tb-js.workspace = true
+tb-net.workspace = true

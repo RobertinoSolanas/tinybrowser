@@ -1,0 +1,17 @@
+[package]
+name = "tb-style"
+description = "tinybrowser: selector matching, specificity, cascade and computed style"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+
+[dependencies]
+tb-core.workspace = true
+tb-dom.workspace = true
+tb-css.workspace = true
+
+[dev-dependencies]
+tb-html.workspace = true
+tb-core.workspace = true

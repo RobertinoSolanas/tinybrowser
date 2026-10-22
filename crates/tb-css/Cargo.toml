@@ -1,0 +1,11 @@
+[package]
+name = "tb-css"
+description = "tinybrowser: CSS tokenizer, parser and AST (selectors, declarations, at-rules)"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+
+[dependencies]
+tb-core.workspace = true

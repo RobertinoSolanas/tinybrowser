@@ -1,0 +1,22 @@
+[package]
+name = "tb-cli"
+description = "tinybrowser: command line browser (tiny)"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+
+[[bin]]
+name = "tiny"
+path = "src/main.rs"
+
+[dependencies]
+tb-core.workspace = true
+tb-browser.workspace = true
+tb-net.workspace = true
+tb-dom.workspace = true
+tb-gfx.workspace = true
+
+[dev-dependencies]
+tb-testkit.workspace = true

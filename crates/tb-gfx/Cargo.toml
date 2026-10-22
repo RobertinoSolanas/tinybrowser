@@ -1,0 +1,11 @@
+[package]
+name = "tb-gfx"
+description = "tinybrowser: software rasterizer, bitmap font and a from-scratch PNG encoder"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+
+[dependencies]
+tb-core.workspace = true

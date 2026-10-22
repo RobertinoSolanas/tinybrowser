@@ -1,0 +1,16 @@
+[package]
+name = "tb-net"
+description = "tinybrowser: URL parser, HTTP/1.1 client, TLS transport, charset detection, cookies, cache"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+
+[dependencies]
+tb-core.workspace = true
+rustls.workspace = true
+webpki-roots.workspace = true
+
+[dev-dependencies]
+tb-testkit.workspace = true

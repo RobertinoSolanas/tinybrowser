@@ -1,0 +1,23 @@
+[package]
+name = "tb-browser"
+description = "tinybrowser: navigation aggregate, resource loader, page, engine facade"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+
+[dependencies]
+tb-core.workspace = true
+tb-net.workspace = true
+tb-dom.workspace = true
+tb-html.workspace = true
+tb-css.workspace = true
+tb-style.workspace = true
+tb-gfx.workspace = true
+tb-layout.workspace = true
+tb-js.workspace = true
+tb-dom-bindings.workspace = true
+
+[dev-dependencies]
+tb-testkit.workspace = true

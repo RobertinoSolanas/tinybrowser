@@ -1,0 +1,14 @@
+[package]
+name = "xtask"
+description = "workspace tooling: JUnit XML test reports"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+
+[[bin]]
+name = "xtask"
+path = "src/main.rs"
+
+[dependencies]

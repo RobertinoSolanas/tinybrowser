@@ -1,0 +1,11 @@
+[package]
+name = "tb-testkit"
+description = "tinybrowser: in-process HTTP test server and fixtures for automatic browser tests"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+
+[dependencies]
+tb-core.workspace = true
