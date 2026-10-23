@@ -9,13 +9,19 @@
 //! * `overflow: hidden|scroll|auto` clips its subtree to the padding box,
 //! * `visibility: hidden` paints nothing but still lets a descendant say
 //!   `visibility: visible` — CSS, not an approximation,
-//! * `<img>`/`<input>` get the placeholder: we do not decode images, and a
-//!   browser shows the same grey box when the picture never arrived.
+//! * a decoded `<img>` is blitted into its content box (`object-fit` is not
+//!   modelled: the picture fills the box the layout made), and everything we
+//!   cannot rasterise — `<video>`, `<canvas>`, a JPEG, a 404 — gets the same
+//!   grey placeholder with its `alt` text that a browser shows when the
+//!   picture never arrived.
+
+use std::collections::HashMap;
+use std::rc::Rc;
 
 use tb_core::{Color, Rect};
-use tb_dom::Dom;
+use tb_dom::{Dom, NodeId};
 use tb_gfx::draw::paint_placeholder;
-use tb_gfx::{BoxPaint, Dash, Framebuffer, TextPaint};
+use tb_gfx::{BoxPaint, Dash, Framebuffer, Image, TextPaint};
 use tb_layout::{BoxKind, LayoutBox, LayoutDocument};
 use tb_style::{BorderStyle, Overflow, Position};
 
@@ -48,8 +54,20 @@ impl Default for PaintOptions {
     }
 }
 
-/// Paint a laid-out document.
+/// Paint a laid-out document without pictures (placeholders only).
 pub fn paint(doc: &LayoutDocument, dom: &Dom, opts: &PaintOptions) -> Framebuffer {
+    paint_with_images(doc, dom, opts, &HashMap::new())
+}
+
+/// Paint a laid-out document. `images` maps an `<img>` node to its decoded
+/// picture — [`crate::images::load_images`] builds it, the layout already
+/// knew its natural size.
+pub fn paint_with_images(
+    doc: &LayoutDocument,
+    dom: &Dom,
+    opts: &PaintOptions,
+    images: &HashMap<NodeId, Rc<Image>>,
+) -> Framebuffer {
     let scale = opts.scale.max(0.01);
     let w = (doc.viewport.width * scale).round().max(1.0) as u32;
     let h = (doc.viewport.height * scale).round().max(1.0) as u32;
@@ -61,6 +79,7 @@ pub fn paint(doc: &LayoutDocument, dom: &Dom, opts: &PaintOptions) -> Framebuffe
         scroll_y: opts.scroll_y,
         show_boxes: opts.show_boxes,
         draw_text: opts.draw_text,
+        images,
     };
     // the root's own background belongs to the canvas, skip its border
     paint_box(&mut fb, dom, &doc.root, None, &ctx, true);
@@ -76,15 +95,16 @@ pub fn paint(doc: &LayoutDocument, dom: &Dom, opts: &PaintOptions) -> Framebuffe
     fb
 }
 
-struct Ctx {
+struct Ctx<'a> {
     scale: f32,
     scroll_x: f32,
     scroll_y: f32,
     show_boxes: bool,
     draw_text: bool,
+    images: &'a HashMap<NodeId, Rc<Image>>,
 }
 
-impl Ctx {
+impl Ctx<'_> {
     /// Document coordinates → device pixels. Fixed boxes ignore the scroll.
     fn rect(&self, r: Rect, fixed: bool) -> Rect {
         let dy = if fixed { 0.0 } else { self.scroll_y };
@@ -162,7 +182,15 @@ fn paint_box(
                 paint_run(fb, run, child_clip, ctx);
             }
         }
-        if wants_placeholder(dom, b) {
+        // a picture we have goes in the content box (padding and border stay
+        // its own); anything we could not rasterise takes the placeholder
+        let picture = b.node.and_then(|n| ctx.images.get(&n));
+        if let Some(img) = picture {
+            let r = ctx.rect(b.content, fixed);
+            if r.width > 0.5 && r.height > 0.5 {
+                tb_gfx::image_blit(fb, img, r, child_clip);
+            }
+        } else if wants_placeholder(dom, b) {
             let r = ctx.rect(b.border_box(), fixed);
             let alt = b
                 .node

@@ -20,13 +20,13 @@ falsche Art von "tiny".
 | `tb-html` (Tokenizer, TreeBuilder, Entities) | ✅ fertig (taz.de: 2893 Elemente in 3 ms) | 34 |
 | `tb-css` (Parser, Selektoren, Werte, `@media`, `calc/var`) | ✅ fertig (260 KB taz-CSS in 5 ms) | 34 |
 | `tb-style` (UA-Sheet, Matching, Kaskade, `ComputedStyle`) | ✅ fertig (taz.de: 2893 Elemente × 3193 Regeln in 51 ms) | 41 |
-| `tb-gfx` (Framebuffer, 5×7-Bitmap-Font, PNG-Encoder) | ✅ fertig (PNG von PIL unabhängig verifiziert) | 33 |
+| `tb-gfx` (Framebuffer, 5×7-Bitmap-Font, PNG-Encoder **+ Decoder**) | ✅ fertig (Decoder gegen PIL verifiziert: alle Farbtypen, Sub-Byte, alle Filter, Adam7) | 33 + 15 |
 | `tb-layout` (Box-Baum, Block/Inline/Flex, Intrinsic Sizing, Hit-Test) | ✅ fertig (taz.de: 3451 Boxen in **2,7 ms**) | 44 |
 | `tb-js` (Lexer, Parser, Interpreter, Objekte, Promise/Async, RegExp, JSON) | ✅ fertig (taz.de: 47 KB echtes Inline-JS in **1,5 ms**, 12/12 Skripte sauber) | 112 |
 | `tb-dom-bindings` (window/document/Element, Events, `<script>`, Forms) | ✅ fertig (Wrapper mit Node-Handles, Timer, fetch-Hook) | 78 |
-| `tb-browser` (Engine, Navigation, ResourceLoader, Page, Paint) | ✅ fertig (taz.de-Snapshot komplett: parse → script → layout → PNG) | 20 + 12 + 5 |
+| `tb-browser` (Engine, Navigation, ResourceLoader, Bilder, Page, Paint) | ✅ fertig (taz.de-Snapshot komplett: parse → script → layout → PNG) | 20 + 12 + 6 + 12 + 3 |
 | `tiny` (CLI) | ✅ fertig (`--dom/--text/--links/--layout/--screenshot/--repl/…`) | 15 |
-| `xtask` (`cargo junit` → `target/junit.xml`) | ✅ fertig (44 Suiten, 537 Tests) | 5 |
+| `xtask` (`cargo junit` → `target/junit.xml`) | ✅ fertig (47 Suiten, 565 Tests) | 5 |
 
 Der detaillierte Fortschritt steht in [`todolist.md`](todolist.md) (jede Aufgabe
 wird beim Fertigstellen abgehakt).
@@ -35,7 +35,7 @@ wird beim Fertigstellen abgehakt).
 
 ```console
 $ cargo test --workspace 2>&1 | grep 'test result' | awk '{s+=$4} END {print s" Tests, 0 Fehler"}'
-538 Tests, 0 Fehler
+565 Tests, 0 Fehler
 $ cargo clippy --workspace --all-targets -- -D warnings   # warning-free
 ```
 
@@ -285,9 +285,16 @@ in exotischen Fällen abweichen), Parser-Kapitel `MAX_NEST = 200`
 **Grafik (✅ fertig):** ARGB-Framebuffer mit Alpha-Compositing und Clipping pro
 Aufruf, Rect-/Linien-/Rundungsfüllung, solide/gestrichelte/gepunktete Ränder,
 Bitmap-Text (5×7, Integer-Skal 1–6, synthetisch fett & schräg, Unterstreichen/
-Durchstreichen), `<img>`-Platzhalter mit Berg-und-Sonne-Glyph plus `alt`-Text,
-PNG-Encoder (Signatur, `IHDR`, `tEXt`, `IDAT`, `IEND`) — das Ergebnis wird von
-Pythons `zlib` **und** PIL sauber gelesen.
+Durchstreichen), PNG-**Encoder** (Signatur, `IHDR`, `tEXt`, `IDAT`, `IEND`) und
+PNG-**Decoder** (`image`): alle Farbtypen (Grau, RGB, Palette, Grau+Alpha,
+RGBA), Bittiefen 1/2/4/8/16, alle fünf Filter (None/Sub/Up/Average/Paeth),
+`tRNS` (Paletten-Alpha und Farbkey), Adam7-Interlacing, `MAX_DIM` als
+Heap-Schutz. Der Decoder ist gegen PIL verifiziert (RGB, RGBA, Palette, 1-bit,
+LA, Adam7 — pixelgenau; 16-bit nimmt, wie libpng und Chrome, das Hochbyte).
+Und ein `<img>` kriegt damit *seine* Pixel: `tb-browser` lädt `src` über den
+`ResourceLoader`, dekodiert, meldet die **natürliche Größe** ans Layout und
+blittet ins Content-Box-Rechteck; ohne Bild bleibt der Platzhalter mit
+Berg-und-Sonne-Glyph und `alt`-Text.
 
 **Layout (✅ fertig):** Block (auto-Breite, `margin: auto`, `box-sizing`,
 Prozent, `min/max`, light Margin-Collapse), Inline-Flow mit Wortumbruch nach
@@ -316,9 +323,11 @@ als Dokument-Reihenfolge, fremde Skripte tolerant geparst), `NavRequest`s
 (`location.href`, `form.submit()`, Anchor-Klick) und `History` mit
 `back()/forward()`/`pushState`.
 
-**Grenzen (bewusst):** kein CSS-Grid (taz nutzt keins), keine Bilddekodierung —
-`<img>` bekommt CSS-Maße, `width`/`height`-Attribute und Aspect-Ratio, sonst
-300×150; keine Web Fonts (font-family → Bitmap-Font, 5×7), keine
+**Grenzen (bewusst):** kein CSS-Grid (taz nutzt keins); dekodiert wird **PNG**,
+JPEG/WebP/GIF haben wir nicht — solche Bilder fallen auf die
+`width`/`height`-Attribute (oder 300×150) zurück und werden als Problem
+gemeldet statt unsichtbar zu verschwinden; `object-fit` fehlt (das Bild füllt
+die Box); keine Web Fonts (font-family → Bitmap-Font, 5×7), keine
 richtungsabhängige Typografie (RTL), kein Tabellen-/`order`-Layout, keine echte
 parallele Skriptausführung, TLS = Fremdcrate.
 
@@ -504,6 +513,9 @@ js:       19 run, 11 skipped, 4 failed   console: 7   problems: 17
 pipeline:   fetch 96 ms · parse 3 ms · style 381 ms · layout 2 ms · script 468 ms · render 12 ms
 ```
 
+(Das `images:`-Format sagt seit dem PNG-Decoder zusätzlich, wie viele Bilder
+wirklich dekodiert sind — die Aufnahme oben stammt von davor.)
+
 Die 4 Skript-Fehler sind Fremd-Skripte (Consent-Wrapper, Doubleclick-Tag,
 Analytics), die ohne ihre Umgebung laufen — `type="module"` wird als Problem
 gemeldet, nicht als Ausnahme. Eine Seite, die nicht perfekt läuft, soll
@@ -516,7 +528,7 @@ Der Snapshot-Lauf ist der *regressionsdichte* Teil: 2895 Elemente, 262 Links,
 
 ```bash
 cargo build --release                        # alles
-cargo test --workspace                       # 538 Tests, 45 Suiten
+cargo test --workspace                       # 565 Tests, 47 Suiten
 cargo test -p tb-browser --test taz_live -- --ignored   # Live-Test (Netz nötig)
 cargo clippy --workspace --all-targets -- -D warnings   # muss warnungsfrei sein
 cargo fmt --all --check
@@ -595,7 +607,7 @@ crates/
   tb-css/                  CSS-Parser (Selektoren, Werte, @media), calc/var
   tb-style/                UA-Sheet, Matching, Kaskade, ComputedStyle
   tb-layout/               Box-Baum, Block/Inline/Flex, Intrinsic Sizing, Hit-Test
-  tb-gfx/                  Framebuffer, Bitmap-Font, PNG-Encoder
+  tb-gfx/                  Framebuffer, Bitmap-Font, PNG-Encoder + PNG-Decoder
   tb-js/                   JS-Engine: Lexer, Parser, Interpreter, EventLoop
   tb-dom-bindings/         window/document/Element/Events für JS
   tb-browser/              Engine, Navigation, ResourceLoader, Page

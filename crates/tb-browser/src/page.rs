@@ -13,14 +13,15 @@ use tb_core::{EngineConfig, Problems, Rect, Result};
 use tb_css::StyleSheet;
 use tb_dom::{Dom, NodeId};
 use tb_dom_bindings::{DomBindings, EvtTarget, Host, NavRequest, ScriptReport};
-use tb_gfx::Framebuffer;
+use tb_gfx::{Framebuffer, Image};
 use tb_js::{Runtime, Value};
 use tb_layout::{element_at, find_box, LayoutDocument};
 use tb_net::Url;
 use tb_style::{compute, MatchState, StyleMap};
 
-use crate::paint::{paint, PaintOptions};
+use crate::paint::{paint_with_images, PaintOptions};
 use crate::resources::SharedLoader;
+use crate::ImageStore;
 
 /// How long each stage took, in milliseconds.
 #[derive(Debug, Clone, Default)]
@@ -63,7 +64,12 @@ pub struct PageStats {
     pub nodes: usize,
     pub elements: usize,
     pub links: usize,
+    /// `<img>` tags in the document.
     pub images: usize,
+    /// …of which we actually have pixels for.
+    pub images_decoded: usize,
+    /// …and which failed to load or use a format we cannot decode.
+    pub images_failed: usize,
     pub scripts: usize,
     pub stylesheets: usize,
     pub css_rules: usize,
@@ -116,6 +122,10 @@ pub struct Page {
     pub sheets: Vec<StyleSheet>,
     pub styles: StyleMap,
     pub layout: Option<LayoutDocument>,
+    /// The pictures this page asked for, decoded and remembered by URL.
+    pub images: ImageStore,
+    /// `<img>` node → its picture, for the painter (natural size went to layout).
+    pub image_nodes: std::collections::HashMap<NodeId, std::rc::Rc<Image>>,
     pub problems: Problems,
     pub timings: Timings,
     /// Elements with at least one author rule (0 when CSS is off).
@@ -159,6 +169,8 @@ impl Page {
             sheets,
             styles,
             layout,
+            images: ImageStore::default(),
+            image_nodes: std::collections::HashMap::new(),
             problems,
             timings,
             matched_elements,
@@ -216,7 +228,22 @@ impl Page {
                         s.links += 1
                     }
                 }
-                "img" => s.images += 1,
+                "img" => {
+                    s.images += 1;
+                    if self.image_nodes.contains_key(&n) {
+                        s.images_decoded += 1;
+                    } else if let Some(src) = el.attr("src") {
+                        let tried = self
+                            .loader
+                            .borrow()
+                            .resolve(src)
+                            .map(|u| self.images.knows_url(&u.to_string()))
+                            .unwrap_or(false);
+                        if tried {
+                            s.images_failed += 1;
+                        }
+                    }
+                }
                 "script" => s.scripts += 1,
                 _ => (),
             }
@@ -532,7 +559,7 @@ impl Page {
     pub fn paint(&mut self, opts: &PaintOptions) -> Framebuffer {
         let started = std::time::Instant::now();
         let fb = match self.layout.clone() {
-            Some(layout) => paint(&layout, &self.dom, opts),
+            Some(layout) => paint_with_images(&layout, &self.dom, opts, &self.image_nodes),
             // no box tree: a blank canvas of viewport size still says "rendered"
             None => Framebuffer::new(
                 self.config.viewport.width.max(1.0) as u32,
@@ -691,18 +718,29 @@ impl Page {
         self.sheets = sheets;
         self.timings.style += started.elapsed().as_secs_f64() * 1000.0;
 
+        // a picture a script inserted is part of the page now, so it is
+        // fetched and decoded here too (already-decoded URLs cost nothing)
+        let (intrinsic, nodes) = crate::images::load_images(
+            &self.dom,
+            &self.loader,
+            &self.images,
+            &mut self.problems,
+            self.config.caps.fetch_subresources,
+        );
+        self.image_nodes = nodes;
+
         if self.config.caps.layout {
             let started = std::time::Instant::now();
-            self.layout = tb_layout::layout(
-                &self.dom,
-                &self.styles,
+            self.layout = tb_layout::Layout::with_intrinsic(
                 tb_style::Viewport {
                     width: self.config.viewport.width,
                     height: self.config.viewport.height,
                     color_scheme: self.config.color_scheme,
                     reduced_motion: false,
                 },
-            );
+                intrinsic,
+            )
+            .layout(&self.dom, &self.styles);
             self.timings.layout += started.elapsed().as_secs_f64() * 1000.0;
         }
         self.invalidate_render();

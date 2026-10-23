@@ -85,6 +85,50 @@ fn chunk(out: &mut Vec<u8>, kind: &[u8; 4], data: &[u8]) {
     out.extend_from_slice(&crc32(&crc_input).to_be_bytes());
 }
 
+/// Walk the chunk list with the CRC of every chunk checked.
+///
+/// This is the only place that knows the container; [`crate::image`] does the
+/// pixel work, and the test helper [`decode`] reuses both.
+pub fn read_chunks(data: &[u8]) -> Result<Vec<([u8; 4], Vec<u8>)>, String> {
+    if data.len() < 8 || data[..8] != PNG_SIGNATURE {
+        return Err("not a PNG (bad signature)".into());
+    }
+    let mut out = Vec::new();
+    let mut pos = 8;
+    while pos + 8 <= data.len() {
+        let len =
+            u32::from_be_bytes([data[pos], data[pos + 1], data[pos + 2], data[pos + 3]]) as usize;
+        let kind = [data[pos + 4], data[pos + 5], data[pos + 6], data[pos + 7]];
+        let body_start = pos + 8;
+        let body_end = body_start + len;
+        if body_end + 4 > data.len() {
+            return Err("truncated chunk".into());
+        }
+        let body = &data[body_start..body_end];
+        let want_crc = u32::from_be_bytes([
+            data[body_end],
+            data[body_end + 1],
+            data[body_end + 2],
+            data[body_end + 3],
+        ]);
+        let mut buf = Vec::with_capacity(4 + body.len());
+        buf.extend_from_slice(&kind);
+        buf.extend_from_slice(body);
+        if crc32(&buf) != want_crc {
+            return Err(format!(
+                "CRC mismatch in chunk {}",
+                String::from_utf8_lossy(&kind)
+            ));
+        }
+        out.push((kind, body.to_vec()));
+        pos = body_end + 4;
+        if kind == *b"IEND" {
+            break;
+        }
+    }
+    Ok(out)
+}
+
 /// A minimal PNG *reader*, used by tests to verify what we wrote.
 #[derive(Debug, Clone, PartialEq)]
 pub struct PngImage {
@@ -106,7 +150,6 @@ pub fn decode(data: &[u8]) -> Result<PngImage, String> {
     let mut height = 0u32;
     let mut bit_depth = 0;
     let mut color_type = 0;
-    let mut interlace = 0;
     let mut comment = None;
     let mut idat: Vec<u8> = Vec::new();
     while pos + 8 <= data.len() {
@@ -143,7 +186,6 @@ pub fn decode(data: &[u8]) -> Result<PngImage, String> {
                 height = u32::from_be_bytes([body[4], body[5], body[6], body[7]]);
                 bit_depth = body[8];
                 color_type = body[9];
-                interlace = body[12];
             }
             b"IDAT" => idat.extend_from_slice(body),
             b"tEXt" => {
@@ -159,39 +201,12 @@ pub fn decode(data: &[u8]) -> Result<PngImage, String> {
     if width == 0 || height == 0 {
         return Err("missing IHDR".into());
     }
-    if interlace != 0 {
-        return Err("interlaced PNG not supported".into());
-    }
-    if bit_depth != 8 {
-        return Err(format!("bit depth {bit_depth} not supported"));
-    }
-    let bytes_per_pixel = match color_type {
-        6 => 4usize,
-        2 => 3usize,
-        _ => return Err(format!("colour type {color_type} not supported")),
-    };
-    let raw = tb_core::zlib_inflate(&idat).map_err(|e| format!("inflate: {e}"))?;
-    let stride = (width as usize) * bytes_per_pixel;
-    let expect = (stride + 1) * height as usize;
-    if raw.len() < expect {
-        return Err(format!("short pixel data: {} < {expect}", raw.len()));
-    }
-    let mut pixels = vec![Color::TRANSPARENT; (width * height) as usize];
-    for y in 0..height as usize {
-        let filter = raw[y * (stride + 1)];
-        if filter != 0 {
-            return Err(format!("filter {filter} not supported (we write 0)"));
-        }
-        let row = &raw[y * (stride + 1) + 1..y * (stride + 1) + 1 + stride];
-        for x in 0..width as usize {
-            let (r, g, b, a) = if bytes_per_pixel == 4 {
-                (row[x * 4], row[x * 4 + 1], row[x * 4 + 2], row[x * 4 + 3])
-            } else {
-                (row[x * 3], row[x * 3 + 1], row[x * 3 + 2], 255)
-            };
-            pixels[y * width as usize + x] = Color::rgba(r, g, b, a);
-        }
-    }
+    // the real work lives in `image` (filters, palettes, sub-byte samples);
+    // this helper only adds the header fields a test might want to see
+    let img = crate::image::from_png(data)?;
+    let pixels: Vec<Color> = (0..img.width * img.height)
+        .map(|i| img.get(i % img.width, i / img.width))
+        .collect();
     Ok(PngImage {
         width,
         height,

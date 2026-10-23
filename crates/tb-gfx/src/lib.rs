@@ -27,11 +27,13 @@ pub mod draw;
 pub mod font;
 pub mod font_data;
 pub mod framebuffer;
+pub mod image;
 pub mod png;
 
 pub use draw::{BoxPaint, TextPaint};
 pub use font::{metrics, Font, TextRun};
 pub use framebuffer::{Dash, Framebuffer};
+pub use image::{blit as image_blit, from_png as image_decode, Image};
 pub use png::{decode as png_decode, encode as png_encode, PNG_SIGNATURE};
 
 /// The whole-page screenshot convenience: encode and optionally write.

@@ -18,11 +18,16 @@ use tb_core::{EngineConfig, Phase, Problems, TbError};
 use tb_net::{HttpClient, Url};
 
 /// What a sub-resource turned into.
+///
+/// Text loads fill `text` (charset-correct, that is what scripts and CSS
+/// need); binary loads fill `bytes` — a picture that went through a charset
+/// decoder is not a picture any more.
 #[derive(Debug, Clone)]
 pub struct Loaded {
     pub url: String,
     pub status: u16,
     pub text: String,
+    pub bytes: Vec<u8>,
     pub from_cache: bool,
 }
 
@@ -39,8 +44,10 @@ pub struct ResourceLoader {
     used: usize,
     seen: HashSet<String>,
     memory: HashMap<String, Loaded>,
+    /// Pictures, by absolute URL: raw bytes, no charset detour.
+    binary: HashMap<String, Loaded>,
     /// Test/demo hook: canned bodies by absolute URL, consulted first.
-    stubs: HashMap<String, (u16, String)>,
+    stubs: HashMap<String, (u16, Vec<u8>)>,
     pub problems: Problems,
 }
 
@@ -66,6 +73,7 @@ impl ResourceLoader {
             used: 0,
             seen: HashSet::new(),
             memory: HashMap::new(),
+            binary: HashMap::new(),
             stubs: HashMap::new(),
             problems: Problems::new(),
         }
@@ -81,8 +89,15 @@ impl ResourceLoader {
 
     /// Offline/test mode: answer these URLs without touching the network.
     pub fn stub(&mut self, absolute_url: &str, status: u16, text: impl Into<String>) {
+        let text: String = text.into();
         self.stubs
-            .insert(absolute_url.to_string(), (status, text.into()));
+            .insert(absolute_url.to_string(), (status, text.into_bytes()));
+    }
+
+    /// The same, for bytes: a PNG fixture needs to stay byte exact.
+    pub fn stub_bytes(&mut self, absolute_url: &str, status: u16, bytes: impl Into<Vec<u8>>) {
+        self.stubs
+            .insert(absolute_url.to_string(), (status, bytes.into()));
     }
 
     pub fn fetched(&self) -> usize {
@@ -125,11 +140,12 @@ impl ResourceLoader {
         let url = self.resolve(href)?;
         let key = url.to_string();
 
-        if let Some((status, text)) = self.stubs.get(&key).cloned() {
+        if let Some((status, bytes)) = self.stubs.get(&key).cloned() {
             return Some(Loaded {
                 url: key,
                 status,
-                text,
+                text: String::from_utf8_lossy(&bytes).into_owned(),
+                bytes: Vec::new(),
                 from_cache: false,
             });
         }
@@ -147,12 +163,26 @@ impl ResourceLoader {
         }
         self.used += 1;
 
+        if url.scheme == "data" {
+            return data_url_bytes(&key).map(|bytes| {
+                let out = Loaded {
+                    url: key.clone(),
+                    status: 200,
+                    text: String::from_utf8_lossy(&bytes).into_owned(),
+                    bytes: Vec::new(),
+                    from_cache: false,
+                };
+                self.memory.insert(key, out.clone());
+                out
+            });
+        }
         if url.scheme == "file" {
             return self.read_file(&url).map(|text| {
                 let out = Loaded {
                     url: key.clone(),
                     status: 200,
                     text,
+                    bytes: Vec::new(),
                     from_cache: false,
                 };
                 self.memory.insert(key, out.clone());
@@ -182,6 +212,7 @@ impl ResourceLoader {
                     url: key.clone(),
                     status,
                     text,
+                    bytes: Vec::new(),
                     from_cache: r.from_cache,
                 };
                 self.memory.insert(key, out.clone());
@@ -192,6 +223,97 @@ impl ResourceLoader {
                 None
             }
         }
+    }
+
+    /// Raw bytes, for `<img>` and friends. Kept apart from the text cache on
+    /// purpose: a charset decoder would eat a PNG, and a picture must not
+    /// poison the text answer for the same URL.
+    pub fn load_binary(&mut self, href: &str) -> Option<Loaded> {
+        let url = self.resolve(href)?;
+        let key = url.to_string();
+
+        if let Some((status, bytes)) = self.stubs.get(&key).cloned() {
+            return Some(Loaded {
+                url: key,
+                status,
+                text: String::new(),
+                bytes,
+                from_cache: false,
+            });
+        }
+        if let Some(hit) = self.binary.get(&key) {
+            return Some(hit.clone());
+        }
+        if !self.seen.insert(key.clone()) {
+            return None;
+        }
+        if self.used >= self.budget {
+            self.problems
+                .warn(Phase::Browser, format!("subresource budget used up: {key}"));
+            return None;
+        }
+        self.used += 1;
+
+        let (status, bytes, from_cache) = if url.scheme == "data" {
+            match data_url_bytes(&key) {
+                Some(b) => (200u16, b, false),
+                None => {
+                    self.problems
+                        .warn(Phase::Network, format!("bad data: URL: {key}"));
+                    return None;
+                }
+            }
+        } else if url.scheme == "file" {
+            match read_bytes_max(&file_path(&url), MAX_IMAGE_BYTES) {
+                Ok(b) => (200u16, b, false),
+                Err(e) => {
+                    self.problems.warn(Phase::Network, format!("{}: {e}", url));
+                    return None;
+                }
+            }
+        } else {
+            let Some(client) = self.client.clone() else {
+                self.problems
+                    .info(Phase::Browser, format!("offline page, not fetched: {key}"));
+                return None;
+            };
+            match client.fetch(&url) {
+                Ok(r) => {
+                    let status = r.response.status;
+                    if (r.response.body.len() as u64) > MAX_IMAGE_BYTES {
+                        self.problems.warn(
+                            Phase::Browser,
+                            format!(
+                                "picture too big ({} bytes), not decoded: {key}",
+                                r.response.body.len()
+                            ),
+                        );
+                        return None;
+                    }
+                    if status >= 400 {
+                        self.problems
+                            .warn(Phase::Network, format!("{status} for {key}"));
+                    }
+                    (status, r.response.body.clone(), r.from_cache)
+                }
+                Err(e) => {
+                    self.problems.warn(Phase::Network, format!("{key}: {e}"));
+                    return None;
+                }
+            }
+        };
+        if status >= 400 || bytes.is_empty() {
+            return None;
+        }
+        let out = Loaded {
+            url: key.clone(),
+            status,
+            text: String::new(),
+            bytes,
+            from_cache,
+        };
+        self.binary.insert(key, out.clone());
+        Some(out)
     }
 
     fn read_file(&mut self, url: &Url) -> Option<String> {
@@ -229,6 +351,40 @@ pub fn fetch_hook(me: &SharedLoader) -> FetchFn {
 pub fn file_path(url: &Url) -> PathBuf {
     let p = if url.path.is_empty() { "/" } else { &url.path };
     PathBuf::from(tb_net::percent_decode(p))
+}
+
+/// `data:[<mediatype>][;base64],<data>` → bytes. `<img src="data:…">` is on
+/// half the icon sprites on the web, so it is not an extra.
+pub fn data_url_bytes(url: &str) -> Option<Vec<u8>> {
+    let rest = url.strip_prefix("data:")?;
+    let (meta, data) = rest.split_once(',')?;
+    if meta
+        .split(';')
+        .any(|p| p.trim().eq_ignore_ascii_case("base64"))
+    {
+        tb_net::base64_decode(data).ok()
+    } else {
+        Some(tb_net::percent_decode(data).into_bytes())
+    }
+}
+
+/// Pictures are read as bytes; a 16 MB cap stops a hostile `src` from eating
+/// the heap before the decoder's own dimension limit gets a say.
+pub const MAX_IMAGE_BYTES: u64 = 16 * 1024 * 1024;
+
+fn read_bytes_max(path: &std::path::Path, max: u64) -> tb_core::Result<Vec<u8>> {
+    let mut f = std::fs::File::open(path).map_err(|e| TbError::Io(format!("{path:?}: {e}")))?;
+    let mut buf = Vec::new();
+    f.by_ref()
+        .take(max)
+        .read_to_end(&mut buf)
+        .map_err(|e| TbError::Io(format!("{path:?}: {e}")))?;
+    if buf.len() as u64 == max {
+        return Err(TbError::Policy(format!(
+            "{path:?}: larger than the {max} byte picture limit"
+        )));
+    }
+    Ok(buf)
 }
 
 /// A page can be loaded from a plain path (`tiny fixtures/x.html`); turn it

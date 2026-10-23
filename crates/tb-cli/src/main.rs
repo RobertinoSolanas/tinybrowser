@@ -285,8 +285,8 @@ fn summary(page: &Page) {
     );
     println!("title:    {}", page.title());
     println!(
-        "elements: {}   nodes: {}   links: {}   images: {}   scripts: {}",
-        s.elements, s.nodes, s.links, s.images, s.scripts
+        "elements: {}   nodes: {}   links: {}   images: {} ({} decoded)   scripts: {}",
+        s.elements, s.nodes, s.links, s.images, s.images_decoded, s.scripts
     );
     println!(
         "css:      {} sheets, {} rules, {} elements matched   boxes: {}",

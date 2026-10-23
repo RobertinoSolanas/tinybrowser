@@ -138,8 +138,20 @@ Legende: `[ ]` = offen, `[x]` = DONE, `[~]` = teilweise / später verfeinert.
       justify/align, absolute/fixed/relative, none-Subtree, Hit-Test, NaN-Freiheit)
       + 7 taz-Fixtur-Tests (1280/768/375 px, endliche Geometrie, Link-Treffer,
       Reflow, Laufzeit)
-- [ ] **T6.9** Nach Arbeitstag: CSS Grid (taz nutzt keins), echte Bildmetriken
+- [~] **T6.9** Nach Arbeitstag: CSS Grid (taz nutzt keins), echte Bildmetriken
       (Aspect-Ratio aus WebP-Header), `line-height`-Exponenten, Tabellen-Layout
+      — **echte Bildmetriken sind fertig**: PNG-Decoder in `tb_gfx::image`
+      (Farbtypen 0/2/3/4/6, Tiefen 1/2/4/8/16, alle fünf Filter, `tRNS`,
+      Adam7, `MAX_DIM` als Heap-Schutz, gegen PIL verifiziert);
+      `tb_browser::images` lädt `<img src>` über den `ResourceLoader`
+      (Cache, Budget, `data:`-URLs), dekodiert und gibt die natürliche Größe
+      über `tb_layout::IntrinsicSizes` ans Layout weiter — ein dekodiertes Bild
+      schlägt das `width`-Attribut (wie im Browser nach dem Laden), CSS gewinnt
+      immer, Aspect-Ratio bleibt. Gemalt wird ins Content-Box-Rechteck; ohne
+      Bild (404, JPEG, Müll) bleibt der Platzhalter und es gibt ein Problem.
+      15 Decoder- + 12 Pipeline-Tests.
+      **Offen:** JPEG/WebP/GIF (je ein eigener Decoder), CSS Grid,
+      Tabellen-Layout, `line-height`-Exponenten
 
 ## 7. Context `scripting` — JavaScript (`tb-js`)
 

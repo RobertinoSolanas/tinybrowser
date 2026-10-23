@@ -26,7 +26,7 @@ pub mod hit;
 pub mod inline;
 
 pub use block::{text_width, Layout};
-pub use box_tree::{is_replaced, BoxKind, LayoutBox, LineBox, TextRun};
+pub use box_tree::{is_replaced, BoxKind, IntrinsicSizes, LayoutBox, LineBox, TextRun};
 pub use hit::{element_at, hit_test, Hit};
 pub use inline::{FloatRect, FloatState, Side};
 

@@ -360,6 +360,7 @@ pub fn replaced_size(
     viewport_height: f32,
     height_definite: bool,
     dom: &Dom,
+    intrinsic: Option<(f32, f32)>,
 ) -> (f32, f32) {
     use tb_style::{Display, L};
     let attr = |name: &str| -> Option<f32> {
@@ -378,8 +379,14 @@ pub fn replaced_size(
     };
     let tag = box_.node.and_then(|n| dom.tag(n)).unwrap_or("");
     let replaced = is_replaced(tag);
-    let intrinsic_w = attr("width");
-    let intrinsic_h = attr("height");
+    // A decoded picture *is* the intrinsic size. The `width`/`height`
+    // attributes are the page's guess about it — used when the picture is not
+    // there (we do not decode JPEG, it 404s, it is lazy-loaded), and ignored
+    // in favour of the real thing when we have it.
+    let (intrinsic_w, intrinsic_h) = match intrinsic {
+        Some((w, h)) if w > 0.0 && h > 0.0 => (Some(w), Some(h)),
+        _ => (attr("width"), attr("height")),
+    };
     let ratio = match (intrinsic_w, intrinsic_h) {
         (Some(w), Some(h)) if h > 0.0 && w > 0.0 => Some(w / h),
         _ => None,
@@ -462,14 +469,24 @@ pub fn replaced_size(
     (w, h)
 }
 
-/// Intrinsic width of a replaced element: CSS `width` if absolute, otherwise the
-/// `width` attribute, otherwise the default object size. Percentages are
-/// indefinite, so they do not contribute to intrinsic sizing.
-pub fn intrinsic_replaced_width(box_: &LayoutBox, style: &ComputedStyle, dom: &Dom) -> f32 {
+/// Intrinsic width of a replaced element: CSS `width` if absolute, otherwise
+/// the decoded picture, otherwise the `width` attribute, otherwise the default
+/// object size. Percentages are indefinite, so they do not contribute.
+pub fn intrinsic_replaced_width(
+    box_: &LayoutBox,
+    style: &ComputedStyle,
+    dom: &Dom,
+    intrinsic: Option<(f32, f32)>,
+) -> f32 {
     use tb_style::L;
     match style.width {
         L::Px(w) => w,
         L::Auto | L::Linear { .. } => {
+            if let Some((w, _)) = intrinsic {
+                if w > 0.0 {
+                    return w;
+                }
+            }
             let tag = box_.node.and_then(|n| dom.tag(n)).unwrap_or("");
             let def = if is_replaced(tag) { 300.0 } else { 0.0 };
             box_.node
@@ -477,6 +494,32 @@ pub fn intrinsic_replaced_width(box_: &LayoutBox, style: &ComputedStyle, dom: &D
                 .and_then(|v| v.trim().trim_end_matches("px").parse::<f32>().ok())
                 .unwrap_or(def)
         }
+    }
+}
+
+/// Natural sizes the embedder resolved for replaced elements — decoded pictures
+/// keyed by the `<img>` that points at them. Layout knows *that* a picture is
+/// 640×360; only the embedder knows *which* picture and what it turned into.
+#[derive(Debug, Default, Clone)]
+pub struct IntrinsicSizes {
+    sizes: std::collections::HashMap<NodeId, (f32, f32)>,
+}
+
+impl IntrinsicSizes {
+    pub fn new() -> IntrinsicSizes {
+        IntrinsicSizes::default()
+    }
+    pub fn insert(&mut self, node: NodeId, width: f32, height: f32) {
+        self.sizes.insert(node, (width, height));
+    }
+    pub fn get(&self, node: NodeId) -> Option<(f32, f32)> {
+        self.sizes.get(&node).copied()
+    }
+    pub fn len(&self) -> usize {
+        self.sizes.len()
+    }
+    pub fn is_empty(&self) -> bool {
+        self.sizes.is_empty()
     }
 }
 

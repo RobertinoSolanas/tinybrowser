@@ -313,6 +313,7 @@ pub fn layout_inline(
     rect: Rect,
     dom: &Dom,
     floats: &mut FloatState,
+    intrinsic: &crate::box_tree::IntrinsicSizes,
     layout_atomic: &mut dyn FnMut(&mut LayoutBox, Rect),
 ) {
     let base = container.style.clone();
@@ -504,7 +505,13 @@ pub fn layout_inline(
                 max_font = max_font.max(style.font_size);
                 max_line_box = max_line_box.max(style.line_box());
                 let (_, _, avail) = usable(floats, cursor, max_font.max(base.font_size));
-                let (w, h) = replaced_size(descend(&container.children, &path), &style, avail, dom);
+                let (w, h) = replaced_size(
+                    descend(&container.children, &path),
+                    &style,
+                    avail,
+                    dom,
+                    intrinsic,
+                );
                 if pen_x + pending_space + w > rect.right() - right_inset + 0.5 && has_content {
                     pending_space = 0.0;
                     let lh = finish_line(
@@ -544,7 +551,13 @@ pub fn layout_inline(
                 let fy = floats.next_float_y(line_top.max(cursor), side, rect);
                 let fx = floats.next_float_x(fy, side, rect);
                 let (_, _, avail) = usable(floats, fy, style.font_size);
-                let (w, h) = replaced_size(descend(&container.children, &path), &style, avail, dom);
+                let (w, h) = replaced_size(
+                    descend(&container.children, &path),
+                    &style,
+                    avail,
+                    dom,
+                    intrinsic,
+                );
                 {
                     let target = descend_mut(&mut container.children, &path);
                     layout_atomic(target, Rect::new(fx, fy, w, h));
@@ -736,7 +749,14 @@ fn finish_line(
 }
 
 /// Natural size of a replaced element / inline-block, for line-breaking purposes.
-fn replaced_size(box_: &LayoutBox, style: &ComputedStyle, avail: f32, dom: &Dom) -> (f32, f32) {
+fn replaced_size(
+    box_: &LayoutBox,
+    style: &ComputedStyle,
+    avail: f32,
+    dom: &Dom,
+    intrinsic: &crate::box_tree::IntrinsicSizes,
+) -> (f32, f32) {
+    let nat = box_.node.and_then(|n| intrinsic.get(n));
     // an inline container never has a definite height
     crate::box_tree::replaced_size(
         box_,
@@ -745,6 +765,7 @@ fn replaced_size(box_: &LayoutBox, style: &ComputedStyle, avail: f32, dom: &Dom)
         avail,
         false,
         dom,
+        nat,
     )
 }
 
@@ -754,7 +775,11 @@ fn replaced_size(box_: &LayoutBox, style: &ComputedStyle, avail: f32, dom: &Dom)
 /// * `max-content` — the longest line if nothing wrapped
 ///
 /// This is what floats and flex items are measured against.
-pub fn inline_extents(container: &LayoutBox, dom: &Dom) -> (f32, f32) {
+pub fn inline_extents(
+    container: &LayoutBox,
+    dom: &Dom,
+    intrinsic: &crate::box_tree::IntrinsicSizes,
+) -> (f32, f32) {
     let font = Font::system();
     let mut flows: Vec<Flow> = Vec::new();
     tokenise(&container.children, dom, font, &[], &mut flows);
@@ -789,6 +814,7 @@ pub fn inline_extents(container: &LayoutBox, dom: &Dom) -> (f32, f32) {
                     0.0,
                     false,
                     dom,
+                    b.node.and_then(|n| intrinsic.get(n)),
                 );
                 line_min = line_min.max(w);
                 line_max += pending + w;

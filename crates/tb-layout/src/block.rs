@@ -51,11 +51,28 @@ pub struct Document {
 #[derive(Debug, Clone)]
 pub struct Layout {
     pub viewport: Viewport,
+    /// Natural sizes the embedder resolved (decoded pictures).
+    pub intrinsic: crate::box_tree::IntrinsicSizes,
 }
 
 impl Layout {
     pub fn new(viewport: Viewport) -> Layout {
-        Layout { viewport }
+        Layout {
+            viewport,
+            intrinsic: crate::box_tree::IntrinsicSizes::default(),
+        }
+    }
+
+    /// Layout with the natural sizes the embedder resolved (a decoded `<img>`
+    /// is 640×360 whether or not the page said so).
+    pub fn with_intrinsic(
+        viewport: Viewport,
+        intrinsic: crate::box_tree::IntrinsicSizes,
+    ) -> Layout {
+        Layout {
+            viewport,
+            intrinsic,
+        }
     }
 
     /// Build and lay out the box tree for `dom` + `styles`.
@@ -77,7 +94,7 @@ impl Layout {
             dom,
             &mut floats,
         );
-        out_of_flow(&mut root, Some(icb), icb, dom, &mut count);
+        out_of_flow(&mut root, Some(icb), icb, dom, &mut count, &self.intrinsic);
         count = count_boxes(&root);
         let mut max_x = 0.0f32;
         let mut max_y = 0.0f32;
@@ -231,7 +248,7 @@ impl Layout {
                 self.block(b, place, None, count, dom, &mut f);
             };
             let _ = child_cb;
-            layout_inline(box_, content, dom, floats, &mut atomic);
+            layout_inline(box_, content, dom, floats, &self.intrinsic, &mut atomic);
         } else if style.display.is_flex() {
             self.flex(box_, content, count, dom);
         } else {
@@ -698,9 +715,10 @@ impl Layout {
         let inner = if box_.kind == BoxKind::AtomicInline {
             // replaced elements contribute their intrinsic width; a percentage
             // width is indefinite and therefore says nothing about content size
-            crate::box_tree::intrinsic_replaced_width(box_, &box_.style, dom)
+            let intrinsic = box_.node.and_then(|n| self.intrinsic.get(n));
+            crate::box_tree::intrinsic_replaced_width(box_, &box_.style, dom, intrinsic)
         } else if box_.inline_flow {
-            let (lo, hi) = inline_extents(box_, dom);
+            let (lo, hi) = inline_extents(box_, dom, &self.intrinsic);
             if min {
                 lo
             } else {
@@ -759,6 +777,7 @@ impl Layout {
         dom: &Dom,
     ) {
         let style = box_.style.clone();
+        let intrinsic = box_.node.and_then(|n| self.intrinsic.get(n));
         let (w, h) = crate::box_tree::replaced_size(
             box_,
             &style,
@@ -766,6 +785,7 @@ impl Layout {
             self.viewport.height,
             height_definite,
             dom,
+            intrinsic,
         );
         let (x, y) = (box_.content.x, box_.content.y);
         box_.content = Rect::new(x, y, w.max(0.0), h.max(0.0));
@@ -945,6 +965,7 @@ fn out_of_flow(
     viewport: Rect,
     dom: &Dom,
     count: &mut usize,
+    intrinsic: &crate::box_tree::IntrinsicSizes,
 ) {
     let positioned = !matches!(box_.style.position, Position::Static);
     let own = if positioned {
@@ -958,6 +979,7 @@ fn out_of_flow(
             height: viewport.height,
             ..Default::default()
         },
+        intrinsic: intrinsic.clone(),
     };
     let mut children = std::mem::take(&mut box_.children);
     let mut placed: Vec<LayoutBox> = Vec::with_capacity(children.len());
@@ -971,7 +993,7 @@ fn out_of_flow(
             place_absolute(&mut child, cb, viewport, dom, count, &layout);
         } else {
             let inner = own.or_else(|| Some(box_.padding_box()));
-            out_of_flow(&mut child, inner, viewport, dom, count);
+            out_of_flow(&mut child, inner, viewport, dom, count, intrinsic);
         }
         placed.push(child);
     }
@@ -1026,7 +1048,14 @@ fn place_absolute(
     let mut f = FloatState::default();
     layout.block(&mut tmp, rect, width, count, dom, &mut f);
     let own_pad = tmp.padding_box();
-    out_of_flow(&mut tmp, Some(own_pad), viewport, dom, count);
+    out_of_flow(
+        &mut tmp,
+        Some(own_pad),
+        viewport,
+        dom,
+        count,
+        &layout.intrinsic,
+    );
     let bb = tmp.border_box();
     if width.is_none() {
         if let Some(r) = right {

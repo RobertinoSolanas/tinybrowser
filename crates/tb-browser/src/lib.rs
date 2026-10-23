@@ -29,11 +29,13 @@
 //! the server sent.
 
 pub mod engine;
+pub mod images;
 pub mod page;
 pub mod paint;
 pub mod resources;
 
 pub use engine::{assemble_sheets, paint_options, Engine, History, NavState};
+pub use images::{load_images, ImageStore};
 pub use page::{Heading, Link, Page, PageStats, Timings};
 pub use paint::{paint, PaintOptions};
 pub use resources::{file_path, url_for_input, Loaded, ResourceLoader, SharedLoader};
@@ -44,5 +46,6 @@ pub use tb_core::{Color, EngineConfig, Problem, Problems, Rect, Severity, Size};
 pub use tb_css::StyleSheet;
 pub use tb_dom::{Dom, NodeId};
 pub use tb_dom_bindings::{Host, NavRequest, PageContext, ScriptReport};
-pub use tb_layout::LayoutDocument;
+pub use tb_gfx::Image;
+pub use tb_layout::{IntrinsicSizes, LayoutDocument};
 pub use tb_net::Url;

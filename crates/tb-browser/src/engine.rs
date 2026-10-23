@@ -394,6 +394,20 @@ impl Engine {
             js = Some((rt, bindings));
         }
 
+        // ---- pictures -------------------------------------------------------
+        // after the scripts (a script may have added the `<img>`), before style
+        // and layout: a decoded picture *is* the element's natural size, so the
+        // box tree gets the truth instead of 300×150 and the page stops
+        // jumping around while it loads
+        let image_store = crate::images::ImageStore::new();
+        let (intrinsic, image_nodes) = crate::images::load_images(
+            &dom,
+            &loader,
+            &image_store,
+            &mut problems,
+            config.caps.fetch_subresources,
+        );
+
         // ---- style + layout of the final document ---------------------------
         let sheets = assemble_sheets(&dom, &external);
         let started = std::time::Instant::now();
@@ -409,7 +423,8 @@ impl Engine {
 
         let layout = if config.caps.layout {
             let started = std::time::Instant::now();
-            let l = tb_layout::layout(&dom, &styled.styles, style_viewport(&config));
+            let l = tb_layout::Layout::with_intrinsic(style_viewport(&config), intrinsic)
+                .layout(&dom, &styled.styles);
             timings.layout += started.elapsed().as_secs_f64() * 1000.0;
             self.state = NavState::LaidOut;
             l
@@ -439,6 +454,8 @@ impl Engine {
         );
         let mut page = page;
         page.nav_requests = nav_requests;
+        page.images = image_store;
+        page.image_nodes = image_nodes;
         Ok(page)
     }
 }
