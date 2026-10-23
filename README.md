@@ -22,20 +22,32 @@ falsche Art von "tiny".
 | `tb-style` (UA-Sheet, Matching, Kaskade, `ComputedStyle`) | ✅ fertig (taz.de: 2893 Elemente × 3193 Regeln in 51 ms) | 41 |
 | `tb-gfx` (Framebuffer, 5×7-Bitmap-Font, PNG-Encoder) | ✅ fertig (PNG von PIL unabhängig verifiziert) | 33 |
 | `tb-layout` (Box-Baum, Block/Inline/Flex, Intrinsic Sizing, Hit-Test) | ✅ fertig (taz.de: 3451 Boxen in **2,7 ms**) | 44 |
-| `tb-js`, `tb-dom-bindings`, `tb-browser`, `tiny` | 🚧 als nächstes | — |
+| `tb-js` (Lexer, Parser, Interpreter, Objekte, Promise/Async, RegExp, JSON) | ✅ fertig (taz.de: 47 KB echtes Inline-JS in **1,5 ms**, 12/12 Skripte sauber) | 112 |
+| `tb-dom-bindings`, `tb-browser`, `tiny` | 🚧 als nächstes | — |
 
 Der detaillierte Fortschritt steht in [`todolist.md`](todolist.md) (jede Aufgabe
 wird beim Fertigstellen abgehakt).
 
-**Was jetzt schon läuft** (Phase 0–6, ohne CLI):
+**Was jetzt schon läuft** (Phase 0–7, ohne CLI):
 
 ```console
-$ cargo test --workspace 2>&1 | grep 'test result' | tail -4
-test result: ok. 36 passed   (tb-layout/tests/layout.rs)
-test result: ok.  7 passed   (tb-layout/tests/fixtures_taz.rs)
-test result: ok. 33 passed   (tb-gfx lib)
-test result: ok. 288 passed total, 0 failed
+$ cargo test --workspace 2>&1 | grep 'test result' | awk '{s+=$4} END {print s" Tests, 0 Fehler"}'
+400 Tests, 0 Fehler
 ```
+
+Die JavaScript-Engine läuft schon in sich geschlossen — Konsolen-Ersatz:
+
+```console
+$ cargo run -q --release -p tb-js --example run -- \
+    '[3,1,2].sort((a,b)=>a-b).map(x=>`#${x}`).join(' ') + ' ' + [1,2,3].reduce((a,b)=>a*b)'
+=> "#1 #2 #3 6"
+$ cargo run --release -p tb-js --example bench -- fixtures/js/taz-inline.js 200
+      47 KB · lex   0.46 ms · parse   0.97 ms · tolerant   0.96 ms · 63 statements kept
+strict parse: clean
+```
+
+(`fixtures/js/taz-inline.js` sind die 12 klassischen Inline-Skripte der echten
+taz.de — GPT-Tag, Swiper-Init, Alpine-Reste — committed als Offline-Benchmark.)
 
 **Ziel-Ausgabe** (Phase 9, wenn `tb-browser` + CLI fertig sind — die Zahlen
 stammen aus den aktuellen Fixture-Läufen):
@@ -160,7 +172,7 @@ render weiter und die Tests prüfen, *welche* und *wie viele* Probleme auftreten
 | DEFLATE/gzip/zlib | ✅ fertig: Encoder **und** Decoder (RFC-1951/1950/1952, python-zlib-Kreuztest) |
 | HTTP/1.1 | ✅ fertig: Request/Response, HeaderMap, Chunked, Redirects, Cookies, Cache, `data:`-URLs |
 | URL | ✅ fertig: RFC-3986 + WHATWG-Relativreferenzen (`//host`, `?q`, `#f`) |
-| JavaScript | 🚧 geplant: Lexer, Parser (Pratt), Interpreter, Objekte/Prototypen, Closures, `this`, Promise/Job-Queue, `setTimeout`-Task-Queue, `async/await` |
+| JavaScript | ✅ fertig: Lexer (UTF-8-sicher, Regex/Division, ASI), rekursiver Parser mit Pratt-artiger Präzedenzkette, Interpreter (Closures, `this`, Exceptions), Objekt-/Prototypsystem, Microtask-Queue + Timer-Queue, `async/await`, eigene Regex-Maschine (Backtracking), eigener JSON-Parser/-Schreiber |
 | DOM-API für JS | 🚧 geplant: `document.*`, `Element.*`, `classList`, `dataset`, Events, `querySelector(All)` |
 | TLS | ❌ `rustls` + `webpki-roots` |
 | Bilder (`<img>`) | ❌ keine Dekodierung; Platzhalter mit `alt`-Text und Rahmen |
@@ -181,25 +193,31 @@ render weiter und die Tests prüfen, *welche* und *wie viele* Probleme auftreten
 * **JUnit**: `cargo junit` (xtask) erzeugt `target/junit.xml` mit einer
   `<testsuite>` pro Test-Target, inkl. stdout/stderr und Failure-Messages.
 
-Aktueller Stand — **288 Tests, 0 Fehler** (`cargo test --workspace`):
+Aktueller Stand — **400 Tests, 0 Fehler** (`cargo test --workspace`, inklusive
+7 Doc-Tests):
 
 ```console
-test result: ok. 30 passed   tb-core      (Geometrie, Farbe, DEFLATE/gzip ± python-Kreuztest)
-test result: ok. 46 passed   tb-net       (URL-Vektoren, HTTP, Chunked, Charset, Cookies, Cache)
-test result: ok. 11 passed   tb-net/e2e   (echter HTTP gegen tb-testkit, inkl. 304/ETag)
-test result: ok. 11 passed   tb-dom       (Arena, Traversal, Serializer)
-test result: ok. 34 passed   tb-html      (Tokenizer, TreeBuilder, Fuzz ohne Panics)
-test result: ok. 34 passed   tb-css       (Werte, Selektoren, @media, Nesting, @scsssope-Müll)
-test result: ok. 41 passed   tb-style     (Matcher, Kaskade, var/calc, UA-Sheet, taz-Fixtures)
-test result: ok. 33 passed   tb-gfx       (Framebuffer, Font, PNG round-trip, CRC/Adler-Vektoren)
-test result: ok. 43 passed   tb-layout    (Box-Geometrie, Umbruch, Flex, Position, Hit-Test)
+test result: ok. 30 passed   tb-core       (Geometrie, Farbe, DEFLATE/gzip ± python-Kreuztest)
+test result: ok. 46 passed   tb-net        (URL-Vektoren, HTTP, Chunked, Charset, Cookies, Cache)
+test result: ok. 11 passed   tb-net/e2e    (echter HTTP gegen tb-testkit, inkl. 304/ETag)
+test result: ok. 11 passed   tb-dom        (Arena, Traversal, Serializer)
+test result: ok. 34 passed   tb-html       (Tokenizer, TreeBuilder, Fuzz ohne Panics)
+test result: ok. 33 passed   tb-css        (Werte, Selektoren, @media, Nesting, @scsssope-Müll)
+test result: ok. 41 passed   tb-style      (Matcher, Kaskade, var/calc, UA-Sheet, taz-Fixtures)
+test result: ok. 32 passed   tb-gfx        (Framebuffer, Font, PNG round-trip, CRC/Adler-Vektoren)
+test result: ok. 43 passed   tb-layout     (Box-Geometrie, Umbruch, Flex, Position, Hit-Test)
 test result: ok.  7 passed   tb-layout/taz (echte Seite bei 1280/768/375 px)
+test result: ok. 34 passed   tb-js/lexer   (Zahlen, Strings, Templates, Regex, ASI)
+test result: ok. 11 passed   tb-js/parser  (Destructuring, Klassen, ASI, Toleranz)
+test result: ok. 54 passed   tb-js/interp  (Ausdrücke, Closures, this, Klassen, Promise/async)
+test result: ok.  6 passed   tb-js/robust  (4000 Zufallsskripte, Tiefen-Limit, Benchmark)
+test result: ok.  5 passed   tb-js/taz     (die echten Inline-Skripte von taz.de + Benchmark)
 test result: ok.  2 passed   tb-testkit
 ```
 
-Dazu vier Doc-Tests. Die taz.de-Fixtures (HTML + drei echte Stylesheets) sind
-committed, laufen also **offline** und deterministisch; der Live-Test gegen
-`https://taz.de` kommt mit `tb-browser` (Phase 10).
+Die taz.de-Fixtures (HTML + drei echte Stylesheets) sind committed, laufen also
+**offline** und deterministisch; der Live-Test gegen `https://taz.de` kommt mit
+`tb-browser` (Phase 10).
 
 
 ---
@@ -224,12 +242,27 @@ UA < Autor < `style=""` (mit `!important`-Umkehr), Vererbung nach CSS-Regeln,
 `var()` mit Fallback, `calc()` → lineare Länge (`pct% + px`), `::before`/
 `::after`-`content`.
 
-**JavaScript (🚧 geplant):** `var/let/const`, Funktionen, Pfeilfunktionen, Closures,
-`this`/`call`/`apply`/`bind`, Objekte, Arrays, Strings, Zahlen, `try/catch/
-finally`, `throw`, `for`/`for-in`/`for-of`/`while`/`switch`, `class` (Basis),
-Getter/Setter, Template-Literals, Spread/Rest, Destructuring (Basis),
-`Promise`+Microtask-Queue, `async/await`, `setTimeout`, `console.*`, `JSON`,
-`Math`, `Date`, `RegExp` (Basis).
+**JavaScript (✅ fertig):** `var/let/const` (mit TDZ-Verzicht, dokumentiert),
+Funktionen, Pfeilfunktionen, Closures, `this`/`call`/`apply`/`bind`, `arguments`,
+Objekte (Literal, Shorthand, computed keys, `__proto__`), Arrays (~40 Methoden),
+Strings (~35 Methoden), Zahlen (`toFixed`/`toString(radix)`), `try/catch/finally`,
+`throw` (jeder Wert), `for`/`for-in`/`for-of`/`while`/`do`/`switch` (auch labels),
+Destructuring (verschachtelt, Defaults, Rest), Spread/Rest, Klassen (`extends`,
+`super` in Methoden und Konstruktoren, statische Mitglieder, Felder), Getter/Setter,
+Template-Literals (auch tagged), `?.`, `??`, `||=`/`&&=`/`??=`, `**`, `new.target`,
+`Promise` (then/catch/finally/all/race/allSettled, Thenable-Adoption),
+`async`/`await`, `setTimeout`/`setInterval` (virtuelle Uhr), `queueMicrotask`,
+`console.*`, `JSON` (parse/stringify inkl. Replacer/Reviver), `Math`, `Date`,
+`Map`/`Set`, `RegExp` (eigene Backtracking-Maschine: Klassen, Anker, Gruppen,
+Lookahead, Backreferences, `g`/`i`/`m`/`s`/`u`), `Error`-Hierarchie, `eval`,
+`structuredClone`.
+
+**JS-Grenzen (bewusst):** keine Generatoren-Fortsetzung (`yield` führt den Body
+einmal aus), kein ES-Modul-`import`/`export` (Loader überspringt `type="module"`,
+T8.4), Regex-Lookbehind wird abgelehnt statt falsch gematcht, `Symbol`/`BigInt`
+nur light, keine Worker, `await` pumpt die Event-Loop synchron (Reihenfolge kann
+in exotischen Fällen abweichen), Parser-Kapitel `MAX_NEST = 200`
+(tief verschachteltes Minified-JS wird Syntaxfehler statt Stack-Overflow).
 
 **Grafik (✅ fertig):** ARGB-Framebuffer mit Alpha-Compositing und Clipping pro
 Aufruf, Rect-/Linien-/Rundungsfüllung, solide/gestrichelte/gepunktete Ränder,
@@ -334,6 +367,68 @@ dasselbe BFC mit, damit nachfolgende Absätze den Platz wirklich umfließen.
 
 ---
 
+## 5.3 Wie die JavaScript-Engine läuft
+
+**Lexer** (`lexer`): ein Durchlauf über Bytes, Output sind `Lexed { token, span,
+nl, prev }`. Zwei Dinge machen mehr als „Regex in Stücke schneiden“: (1) `/`
+ist nur dann ein Regex-Literal, wo kein Wert zu Ende sein kann — deshalb merkt
+sich der Lexer das vorherige Lexem (`Lexeme::ValueEnd` …); (2) ASI — der Lexer
+zählt nicht Zeilen, er markiert nur *„vor diesem Token war ein Zeilenvorschub“*
+(`nl`), und der Parser setzt das Semikolon genau dort, wo die Spec es erlaubt.
+Strings und Idents sind UTF-8-sicher (Lead-Byte → Sequenzlänge, nie ein
+Mid-Byte-Zerhacken), Templates werden komplett kassiert (inkl. `${}`-Zählung)
+und später erneut geparst.
+
+**Parser** (`parser`): rekursiver Abstieg mit einer Präzedenzkette pro Ebene.
+Zwei bewusste Entscheidungen:
+
+* `parse_program` ist **streng** wie ein Browser (ein Syntaxfehler tötet das
+  Skript); `parse_tolerant` ist der Fremd-Skript-Modus — er verwirft nur das
+  kaputte Statement und meldet es in `Problems`. Ein exotisches Vendor-Bundle
+  kann so nicht die Seite killen.
+* **Rekursionstiefe ist ein Feature, kein Unfall.** Minifiziertes JS verschachtelt
+  hart; jeder rekursive Einstieg (`parse_statement`, `parse_expression`,
+  `parse_primary`, Binding-Patterns) hole sich einen Slot über `enter()`, ab
+  `MAX_NEST = 200` gibt es einen Syntaxfehler. Ohne das: Stack-Overflow → der
+  ganze Browser ist weg. Gleiches gilt für `JSON.parse` (≤ 200).
+
+**Interpreter** (`runtime` + `exprs`/`stmts`): Baum-Walk über `Rc<Expr>`/`Rc<Stmt>`
+mit einer Environment-Kette (Global/Function/Block), `Value` als Vier-Varianten-
+Enum plus `Rc<RefCell<Obj>>` für Objekte. `this` ist kein Wert im Scope, sondern
+hängt an der Function-Umgebung (Pfeilfunktionen erben die Umgebung, also `this`
+automatisch mit). Besonderheiten, die echte Seiten brauchen:
+
+* **Completion Value.** `last_value` merkt die letzte Auswertungs-Statement-Value;
+  `eval("try { x } catch (e) { 42 }")` liefert 42. Funktionskörper bekommen beim
+  Aufruf ein frisches und beim Zurückkehren das restaurierte `last_value`.
+* **`let`-Schleifen-Bindungen.** `for (let i = …)` forkt pro Iteration eine
+  Environment (`env::fork` + `copy_values` zurück), sonst liefern
+  `fs.map(f => f())` in Callback-Schleifen überall den letzten Wert — der
+  klassische Bug, den jeder Zählcode hat.
+* **Schritt-Budget** statt Strg+C: `tick()` zählt Schritte (Default 30 Mio.) und
+  Depth; ein Feindskript kann den Browser nicht festsetzen, es wirft eine
+  `RangeError`.
+
+**Objekte & Schlüssel** (`value`): `Obj { kind, props: Vec<(Key, Prop)>, proto }`.
+`own_keys()` sortiert wie JS: Integer-Indizes aufsteigend, dann
+Insertions-Reihenfolge (`Object.keys({b:1,a:2,7:3}) === "7,b,a"`) — davon hängen
+`JSON.stringify`, `for-in` und Framework-Magie ab. `Key` ist `Name(Rc<str>)`
+oder `Num(f64)`, damit `a[0]` und `a['0']` derselbe Slot sind.
+
+**Event-Loop** (`jobs`): Promise-Reaktionen liegen in einer VecDeque
+(Microtasks), Timer in einer Liste mit **virtueller Uhr** (deterministisch, kein
+`sleep` — wichtig für Tests). `await` pumpt: erst Microtasks, dann den nächst-
+fälligen Timer, bis die Promise settling ist (mit Pump-Limit). Damit funktioniert
+das klassische `await new Promise(r => setTimeout(r, ms))` ohne Threads; die
+Reihenfolge in exotischen Fällen kann von V8 abweichen (dokumentiert).
+
+**Regex** (`regexp`) und **JSON** (`json`) sind eigene Smalltalks: ein
+Backtracking-VM mit kompilierten Instruktionen (`Char`/`Class`/`Look`/`Split`/
+`Save`/`BackRef`) bzw. ein Hand-Parser mit Tiefen-Limit — kein `regex`-Crate,
+kein `serde_json`.
+
+---
+
 ## 6. Abnahmetest: taz.de
 
 Der Test läuft in zwei Varianten:
@@ -378,7 +473,8 @@ crates/
   tb-cli/                  Binary `tiny`
   tb-testkit/              HTTP-Testserver für E2E-Tests
 tools/xtask/               cargo junit
-fixtures/                  taz.de.html + taz-Stylesheets (Offline-Tests)
+fixtures/                  taz.de.html, die drei echten Stylesheets und
+                           js/taz-inline.js (Offline-Tests + JS-Benchmark)
 ```
 
 ## 8. Lizenz

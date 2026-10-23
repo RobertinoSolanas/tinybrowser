@@ -143,25 +143,48 @@ Legende: `[ ]` = offen, `[x]` = DONE, `[~]` = teilweise / später verfeinert.
 
 ## 7. Context `scripting` — JavaScript (`tb-js`)
 
-- [ ] **T7.1** Lexer: Numbers, Strings (', ", `), Template-Literals mit `${}`,
-      Idents (Unicode), Keyword-Liste, Operatoren, Regex-Literals, Kommentare, ASI-Vorarbeit
-- [ ] **T7.2** Parser (rekursiver Absturz-Parser, Pratt für Ausdrücke):
-      var/let/const, Funktionen (pfeil, method, generator-basics), Klassen (Methoden,
-      `extends`, `super`), if/else, for/for-in/for-of/while/do, switch, try/catch/finally,
-      throw, return/break/continue, Destructuring (light), Spread/Rest, Member/Call/New,
-      Ternär, Comma, logische Operatoren, `typeof`, `void`, `delete`, `in`, `instanceof`
-- [ ] **T7.3** Interpreter: Environment-Chain, Closures, `this`-Bindung,
-      Werttypen (Undefined/Null/Boolean/Number/String/Object/Function/Error/Symbol/BigInt-light)
-- [ ] **T7.4** Objekt-System: Property-Maps, Getter/Setter, Prototype-Ketten,
-      `Object/Function/Array/String/Number/Boolean/Math/JSON/Date/Error/Promise`(Teile)
-- [ ] **T7.5** Promise/Async: Job-Queue (microtask) + Task-Queue (`setTimeout`),
-      `async`/`await` über Fortsetzung, `queueMicrotask`
-- [ ] **T7.6** `console` (log/warn/error/info/debug/table-light) → fängt taz-Logging
-- [ ] **T7.7** Robustheit: Syntaxfehler in Fremdscripten (cash.min.js, Alpine, Google GPT)
-      werden protokolliert und übersprungen, kein Panic, Laufzeitfehler → `Error`-Objekt
-- [ ] **T7.8** Tests: Ausdrucksauswertung,losures, this, Arrays, JSON, String-Methoden,
-      try/catch, Promise-Reihenfolge, async/await, Regex-light, Regex-Methoden,
-      Syntaxfehler-Toleranz, 1000-Iterationen-Benchmark
+- [x] **T7.1** Lexer: Numbers (dez/hex/bin/oct, `_`, Exponent, BigInt-light), Strings
+      (', ", UTF-8 sicher), Template-Literals mit `${}`, Idents (Unicode), Keywords,
+      Operatoren, Regex-Literals (`/` nur wo ein Wert beginnen kann), Kommentare
+      (auch `<!--`), ASI-Vorarbeit (`Lexed::nl`), `#!`-Shebang
+- [x] **T7.2** Parser (rekursiver Absturz-Parser, Präzedenzkette für Ausdrücke):
+      var/let/const, Funktionen (pfeil, method, async, generator-Basics), Klassen
+      (Methoden, `extends`, `super`, statisch, Felder), if/else, for/for-in/for-of/while/do,
+      switch, try/catch/finally, throw, return, labeled break/continue, Destructuring
+      (Array/Objekt/Rest/Defaults, verschachtelt), Spread/Rest, Member/Call/New, Ternär,
+      Komma, logische Operatoren + `??`/`?.`, logische Zuweisung, `**`, `typeof`, `void`,
+      `delete`, `in`, `instanceof`, `new.target`, Getter/Setter, Optional-Catch-Binding
+      — plus **Tiefen-Limit** (`MAX_NEST`): minifiziertes Fremd-JS verschachtelt hart,
+      ein Stack-Overflow wäre ein Browser-Absturz, deshalb Syntaxfehler
+- [x] **T7.3** Interpreter: Environment-Chain (Global/Function/Block), Closures,
+      `this`-Bindung (call/apply/bind, Methode, Pfeilfunktion erbt), `let`-Schleifen
+      erfassen pro Iteration eine eigene Bindung, Completion-Value (`last_value`),
+      Werttypen (Undefined/Null/Boolean/Number/String/Object/Function/Error) +
+      Schritt-Budget (`step_limit`) statt Endlosschleife
+- [x] **T7.4** Objekt-System: Property-Listen in JS-Reihenfolge (Integer-Keys zuerst,
+      dann Insertions-Reihenfolge), Getter/Setter, Prototype-Ketten, `Object`/`Function`/
+      `Array`/`String`/`Number`/`Boolean`/`Math`/`JSON`/`Date`/`Error`/`Map`/`Set`/
+      `RegExp`/`Promise`, `defineProperty`/`freeze`/`create`/`assign`, `__proto__`
+- [x] **T7.5** Promise/Async: Microtask-Queue + Task-Queue (`setTimeout`/`setInterval`
+      mit virtueller Uhr), `then`/`catch`/`finally`, `all`/`race`/`allSettled`,
+      Thenable-Adoption, `queueMicrotask`, `async`/`await` (await pumpt die Queue —
+      dokumentierte Abweichung: synchron statt echter Fortsetzung)
+- [x] **T7.6** `console` (log/warn/error/info/debug/table-light) → fängt taz-Logging,
+      `Runtime::console()` / `console_level()` für Tests und CLI
+- [x] **T7.7** Robustheit: Syntaxfehler in Fremdscripten werden protokolliert und
+      statementweise übersprungen (`Parser::parse_tolerant`), kein Panic; Laufzeitfehler
+      → echtes `Error`-Objekt (TypeError/ReferenceError/SyntaxError/RangeError);
+      4000 Zufalls-Skripte ohne Panic; **alle 12 klassischen Inline-Skripte von
+      taz.de (48 KB, inkl. Google-GPT-Bundle) parsen sauber**
+      (`tests/fixtures_taz_js.rs`). Tiefe: Parser ≤ `MAX_NEST`, `JSON.parse` ≤ 200
+- [~] **T7.8** Tests: 109 Stück (34 Lexer, 54 Interpreter, 11 Parser, 6 Robustheit,
+      4 taz-Fixtur) + 2 Doc-Tests — Ausdrucksauswertung, Closures, `this`, Arrays,
+      JSON, String-Methoden, try/catch, Promise-Reihenfolge, async/await, Regex-light,
+      Syntaxfehler-Toleranz, 1000-Iterationen-Benchmark (266 ms), Fuzz-artige Zufalls-
+      skripte, Deep-Nesting
+      **Bekannte Lücken:** keine Generator-Fortsetzung (`yield` läuft den Body nur
+      einmal), kein ES-Modul-`import`/`export` (T8.4 überspringt `type="module"`),
+      Lookbehind in Regex abgelehnt, `Symbol`/`BigInt` light, keine Worker
 
 ## 8. Context `scripting` — DOM-Bindings (`tb-dom-bindings`)
 
