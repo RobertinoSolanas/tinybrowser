@@ -30,7 +30,8 @@ fn style_one(html: &str, css: &str, find: Find) -> ComputedStyle {
         Find::Id(id) => dom.get_element_by_id(id).expect("element with id"),
         Find::TagN(tag, n) => {
             let all = dom.get_elements_by_tag(tag);
-            *all.get(n).unwrap_or_else(|| panic!("no <{tag}> #{n} in {html}"))
+            *all.get(n)
+                .unwrap_or_else(|| panic!("no <{tag}> #{n} in {html}"))
         }
     };
     out.styles
@@ -83,13 +84,25 @@ fn specificity_decides() {
     );
     assert_eq!(s.color, tb_core::Color::parse("blue").unwrap());
     // id outranks class+type no matter the order
-    let s = style_one(html, "div.a { color: black } #a { color: red }", Find::Id("a"));
+    let s = style_one(
+        html,
+        "div.a { color: black } #a { color: red }",
+        Find::Id("a"),
+    );
     assert_eq!(s.color, tb_core::Color::parse("red").unwrap());
     // equal specificity: later wins
     // type+class (0,1,1) beats class alone (0,1,0) even when written first
-    let s = style_one(html, "div.b { color: red } .b { color: green }", Find::Id("a"));
+    let s = style_one(
+        html,
+        "div.b { color: red } .b { color: green }",
+        Find::Id("a"),
+    );
     assert_eq!(s.color, tb_core::Color::parse("red").unwrap());
-    let s = style_one(html, ".b { color: red } div.b { color: black }", Find::Id("a"));
+    let s = style_one(
+        html,
+        ".b { color: red } div.b { color: black }",
+        Find::Id("a"),
+    );
     assert_eq!(s.color, tb_core::Color::parse("black").unwrap());
 }
 
@@ -104,7 +117,11 @@ fn important_and_style_attribute_origins() {
     assert_eq!(s.color, tb_core::Color::parse("red").unwrap());
     // but UA !important would beat author !important — we have none, so the
     // author sheet always wins over the UA sheet:
-    let s = style_one("<div>x</div>", "div { display: inline }", Find::TagN("div", 0));
+    let s = style_one(
+        "<div>x</div>",
+        "div { display: inline }",
+        Find::TagN("div", 0),
+    );
     assert_eq!(s.display, Display::Inline);
 }
 
@@ -126,7 +143,11 @@ fn inheritance_flows_down_and_can_be_stopped() {
 
 #[test]
 fn shorthands_expand_to_sides() {
-    let s = style_one("<div id=a>x</div>", "#a{margin:1px 2px 3px 4px}", Find::Id("a"));
+    let s = style_one(
+        "<div id=a>x</div>",
+        "#a{margin:1px 2px 3px 4px}",
+        Find::Id("a"),
+    );
     assert_eq!(s.margin, [L::Px(1.0), L::Px(2.0), L::Px(3.0), L::Px(4.0)]);
     let s = style_one("<div id=a>x</div>", "#a{margin:10px 5px}", Find::Id("a"));
     assert_eq!(s.margin, [L::Px(10.0), L::Px(5.0), L::Px(10.0), L::Px(5.0)]);
@@ -147,7 +168,10 @@ fn shorthands_expand_to_sides() {
     );
     assert_eq!(s.border_width, [1.0, 0.0, 0.0, 3.0]);
     assert_eq!(s.border_style[ComputedStyle::TOP], BorderStyle::Dotted);
-    assert_eq!(s.border_color[ComputedStyle::LEFT], tb_core::Color::rgb(0, 0, 255));
+    assert_eq!(
+        s.border_color[ComputedStyle::LEFT],
+        tb_core::Color::rgb(0, 0, 255)
+    );
 }
 
 #[test]
@@ -205,7 +229,10 @@ fn media_queries_filter_rules_by_viewport() {
     })
     .style_document(&dom, &sheets);
     let p = dom.get_element_by_id("a").unwrap();
-    assert_eq!(out.styles.get(p).unwrap().color, tb_core::Color::parse("blue").unwrap());
+    assert_eq!(
+        out.styles.get(p).unwrap().color,
+        tb_core::Color::parse("blue").unwrap()
+    );
 }
 
 #[test]
@@ -235,7 +262,11 @@ fn custom_properties_resolve_via_var() {
 
 #[test]
 fn calc_reduces_to_linear_lengths() {
-    let s = style_one("<div id=a>x</div>", "#a{width:calc(100% - 32px)}", Find::Id("a"));
+    let s = style_one(
+        "<div id=a>x</div>",
+        "#a{width:calc(100% - 32px)}",
+        Find::Id("a"),
+    );
     assert_eq!(
         s.width,
         L::Linear {
@@ -244,7 +275,11 @@ fn calc_reduces_to_linear_lengths() {
         }
     );
     assert_eq!(s.width.resolve(800.0), 768.0);
-    let s = style_one("<div id=a>x</div>", "#a{width:calc(2em + 10px)}", Find::Id("a"));
+    let s = style_one(
+        "<div id=a>x</div>",
+        "#a{width:calc(2em + 10px)}",
+        Find::Id("a"),
+    );
     assert_eq!(s.width, L::Px(42.0));
     let s = style_one(
         "<div id=a style='--w:25%'>x</div>",
@@ -288,8 +323,14 @@ fn pseudo_class_state_and_negation() {
     );
     let out = StyleEngine::new(vp()).style_document(&dom, &sheets);
     let links = dom.get_elements_by_tag("a");
-    assert_eq!(out.styles.get(links[0]).unwrap().color, tb_core::Color::rgb(255, 0, 0));
-    assert_eq!(out.styles.get(links[1]).unwrap().color, tb_core::Color::parse("#00e").unwrap());
+    assert_eq!(
+        out.styles.get(links[0]).unwrap().color,
+        tb_core::Color::rgb(255, 0, 0)
+    );
+    assert_eq!(
+        out.styles.get(links[1]).unwrap().color,
+        tb_core::Color::parse("#00e").unwrap()
+    );
     let lis = dom.get_elements_by_tag("li");
     assert_eq!(out.styles.get(lis[0]).unwrap().opacity, 1.0);
     assert_eq!(out.styles.get(lis[1]).unwrap().opacity, 0.5);
@@ -355,7 +396,10 @@ fn malformed_css_does_not_break_the_rest() {
     );
     assert_eq!(s.margin[ComputedStyle::TOP], L::Px(5.0));
     assert_eq!(s.font_weight, 700);
-    assert_eq!(s.font_size, 16.0, "invalid font-size is dropped, not applied");
+    assert_eq!(
+        s.font_size, 16.0,
+        "invalid font-size is dropped, not applied"
+    );
     // an unterminated function swallows the rest of the block — like browsers
     let s = style_one(
         "<p id=a>x</p>",
@@ -385,7 +429,10 @@ fn stylesheet_order_beats_specificity_only_when_equal() {
     );
     let out = StyleEngine::new(vp()).style_document(&dom, &sheets);
     let p = dom.get_elements_by_tag("p")[0];
-    assert_eq!(out.styles.get(p).unwrap().color, tb_core::Color::parse("blue").unwrap());
+    assert_eq!(
+        out.styles.get(p).unwrap().color,
+        tb_core::Color::parse("blue").unwrap()
+    );
 }
 
 #[test]
@@ -410,7 +457,10 @@ fn deep_tree_styling_is_fast_and_complete() {
     let ms = t0.elapsed().as_millis();
     let ps = dom.get_elements_by_tag("p");
     assert_eq!(ps.len(), 2000);
-    assert_eq!(out.styles.get(ps[0]).unwrap().color, tb_core::Color::parse("#111").unwrap());
+    assert_eq!(
+        out.styles.get(ps[0]).unwrap().color,
+        tb_core::Color::parse("#111").unwrap()
+    );
     assert_eq!(out.styles.get(ps[7]).unwrap().font_weight, 700);
     // 2000 elements with a rule index must stay well under a second
     assert!(ms < 900, "styling 2000 elements took {ms}ms");

@@ -83,12 +83,7 @@ impl TbError {
     }
 
     /// Convenience constructor with position.
-    pub fn parse_at(
-        phase: Phase,
-        message: impl Into<String>,
-        line: usize,
-        column: usize,
-    ) -> Self {
+    pub fn parse_at(phase: Phase, message: impl Into<String>, line: usize, column: usize) -> Self {
         TbError::Parse {
             phase,
             message: message.into(),
@@ -100,8 +95,11 @@ impl TbError {
     /// The pipeline phase this error belongs to.
     pub fn phase(&self) -> Phase {
         match self {
-            TbError::Io(_) | TbError::Network(_) | TbError::HttpStatus { .. }
-            | TbError::TooManyRedirects { .. } | TbError::Timeout(_) => Phase::Network,
+            TbError::Io(_)
+            | TbError::Network(_)
+            | TbError::HttpStatus { .. }
+            | TbError::TooManyRedirects { .. }
+            | TbError::Timeout(_) => Phase::Network,
             TbError::Parse { phase, .. } => *phase,
             TbError::Script(_) => Phase::Script,
             TbError::Unsupported(_) | TbError::Policy(_) => Phase::Browser,

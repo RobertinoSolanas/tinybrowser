@@ -19,8 +19,8 @@ pub struct MatchState {
     pub active: Option<NodeId>,
 }
 
-/// Selector lists inside `:not()`/`:is()`/`:has()` are parsed once per distinct
-/// argument; the cascade would otherwise re-parse them for every element.
+// Selector lists inside `:not()`/`:is()`/`:has()` are parsed once per distinct
+// argument; the cascade would otherwise re-parse them for every element.
 thread_local! {
     static ARGS_CACHE: RefCell<HashMap<String, Rc<Vec<ComplexSelector>>>> =
         RefCell::new(HashMap::new());
@@ -131,9 +131,7 @@ fn find_ancestor_match(
 
 /// Every simple selector of a compound must hold.
 pub fn matches_compound(dom: &Dom, node: NodeId, compound: &[Simple], state: &MatchState) -> bool {
-    compound
-        .iter()
-        .all(|s| matches_simple(dom, node, s, state))
+    compound.iter().all(|s| matches_simple(dom, node, s, state))
 }
 
 /// One simple selector.
@@ -156,10 +154,7 @@ pub fn matches_simple(dom: &Dom, node: NodeId, s: &Simple, state: &MatchState) -
                 return false;
             };
             let (a, v) = if *insensitive {
-                (
-                    actual.to_ascii_lowercase(),
-                    value.to_ascii_lowercase(),
-                )
+                (actual.to_ascii_lowercase(), value.to_ascii_lowercase())
             } else {
                 (actual.to_string(), value.clone())
             };
@@ -228,7 +223,9 @@ fn matches_pseudo(dom: &Dom, node: NodeId, name: &str, args: &str, state: &Match
                 .count()
                 == 1
         }
-        "nth-child" => nth(args).is_some_and(|(a, b)| nth_hit(a, b, dom.element_index(node) as i32)),
+        "nth-child" => {
+            nth(args).is_some_and(|(a, b)| nth_hit(a, b, dom.element_index(node) as i32))
+        }
         "nth-last-child" => nth(args).is_some_and(|(a, b)| {
             let total = dom.element_sibling_count(node) as i32;
             let i = total - dom.element_index(node) as i32 + 1;
@@ -256,12 +253,8 @@ fn matches_pseudo(dom: &Dom, node: NodeId, name: &str, args: &str, state: &Match
             },
             None => true,
         }),
-        "not" => !args_for(args)
-            .iter()
-            .any(|s| matches(dom, node, s, state)),
-        "is" | "where" | "matches" => args_for(args)
-            .iter()
-            .any(|s| matches(dom, node, s, state)),
+        "not" => !args_for(args).iter().any(|s| matches(dom, node, s, state)),
+        "is" | "where" | "matches" => args_for(args).iter().any(|s| matches(dom, node, s, state)),
         // `:has()` accepts relative selectors: `:has(> img)` is the common case.
         "has" => {
             let a = args.trim();
@@ -440,7 +433,11 @@ mod tests {
         assert_eq!(matching(html, "a[href*='b']").len(), 1);
         assert_eq!(matching(html, "a[download]").len(), 1);
         assert_eq!(matching(html, "a[lang|='de']").len(), 1);
-        assert_eq!(matching(html, "a[href|='https']").len(), 0, "|= needs `https-`");
+        assert_eq!(
+            matching(html, "a[href|='https']").len(),
+            0,
+            "|= needs `https-`"
+        );
     }
 
     #[test]
@@ -461,7 +458,11 @@ mod tests {
             .into_iter()
             .filter(|n| matches(&empty, *n, &s, &MatchState::default()))
             .collect();
-        assert_eq!(hits.len(), 2, "text (even whitespace) is not empty, comments are ignored");
+        assert_eq!(
+            hits.len(),
+            2,
+            "text (even whitespace) is not empty, comments are ignored"
+        );
     }
 
     #[test]
@@ -527,7 +528,16 @@ mod tests {
     fn never_panics_on_weird_selectors() {
         let d = dom("<div>x</div>");
         for s in [
-            ":not(", "nth-child(", "a:::b", "[[[]]", ":lang()", "###", "*+*", ">", "+", ":is(:not())",
+            ":not(",
+            "nth-child(",
+            "a:::b",
+            "[[[]]",
+            ":lang()",
+            "###",
+            "*+*",
+            ">",
+            "+",
+            ":is(:not())",
         ] {
             let sel = tb_css::selector::parse_selector_list(s);
             for c in sel {

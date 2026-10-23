@@ -21,18 +21,20 @@ falsche Art von "tiny".
 | `tb-css` (Parser, Selektoren, Werte, `@media`, `calc/var`) | ✅ fertig (260 KB taz-CSS in 5 ms) | 34 |
 | `tb-style` (UA-Sheet, Matching, Kaskade, `ComputedStyle`) | ✅ fertig (taz.de: 2893 Elemente × 3193 Regeln in 51 ms) | 41 |
 | `tb-gfx` (Framebuffer, 5×7-Bitmap-Font, PNG-Encoder) | ✅ fertig (PNG von PIL unabhängig verifiziert) | 33 |
-| `tb-layout`, `tb-js`, `tb-dom-bindings`, `tb-browser`, `tiny` | 🚧 als nächstes | — |
+| `tb-layout` (Box-Baum, Block/Inline/Flex, Intrinsic Sizing, Hit-Test) | ✅ fertig (taz.de: 3451 Boxen in **2,7 ms**) | 44 |
+| `tb-js`, `tb-dom-bindings`, `tb-browser`, `tiny` | 🚧 als nächstes | — |
 
 Der detaillierte Fortschritt steht in [`todolist.md`](todolist.md) (jede Aufgabe
 wird beim Fertigstellen abgehakt).
 
-**Was jetzt schon läuft** (Phase 0–4, ohne CLI):
+**Was jetzt schon läuft** (Phase 0–6, ohne CLI):
 
 ```console
-$ cargo test --workspace 2>&1 | grep 'test result' | tail -3
-test result: ok. 20 passed   (tb-style lib)
-test result: ok. 17 passed   (tb-style/tests/cascade.rs)
-test result: ok.  4 passed   (tb-style/tests/fixtures_taz.rs)
+$ cargo test --workspace 2>&1 | grep 'test result' | tail -4
+test result: ok. 36 passed   (tb-layout/tests/layout.rs)
+test result: ok.  7 passed   (tb-layout/tests/fixtures_taz.rs)
+test result: ok. 33 passed   (tb-gfx lib)
+test result: ok. 288 passed total, 0 failed
 ```
 
 **Ziel-Ausgabe** (Phase 9, wenn `tb-browser` + CLI fertig sind — die Zahlen
@@ -43,7 +45,7 @@ $ cargo run --release -- --screenshot /tmp/taz.png https://taz.de
 → https://taz.de/  (200 OK, text/html; charset=utf-8, 422271 bytes, 118 ms)
 title:    taz.de | taz.de
 elements: 2893   nodes: 8032   links: 262   images: 168   scripts: 31
-pipeline: parse 3 ms · style 51 ms · layout … · render …
+pipeline: parse 3 ms · style 51 ms · layout 3 ms · render …
 ```
 
 ---
@@ -179,7 +181,7 @@ render weiter und die Tests prüfen, *welche* und *wie viele* Probleme auftreten
 * **JUnit**: `cargo junit` (xtask) erzeugt `target/junit.xml` mit einer
   `<testsuite>` pro Test-Target, inkl. stdout/stderr und Failure-Messages.
 
-Aktueller Stand — **244 Tests, 0 Fehler** (`cargo test --workspace`):
+Aktueller Stand — **288 Tests, 0 Fehler** (`cargo test --workspace`):
 
 ```console
 test result: ok. 30 passed   tb-core      (Geometrie, Farbe, DEFLATE/gzip ± python-Kreuztest)
@@ -190,10 +192,12 @@ test result: ok. 34 passed   tb-html      (Tokenizer, TreeBuilder, Fuzz ohne Pan
 test result: ok. 34 passed   tb-css       (Werte, Selektoren, @media, Nesting, @scsssope-Müll)
 test result: ok. 41 passed   tb-style     (Matcher, Kaskade, var/calc, UA-Sheet, taz-Fixtures)
 test result: ok. 33 passed   tb-gfx       (Framebuffer, Font, PNG round-trip, CRC/Adler-Vektoren)
+test result: ok. 43 passed   tb-layout    (Box-Geometrie, Umbruch, Flex, Position, Hit-Test)
+test result: ok.  7 passed   tb-layout/taz (echte Seite bei 1280/768/375 px)
 test result: ok.  2 passed   tb-testkit
 ```
 
-Dazu drei Doc-Tests. Die taz.de-Fixtures (HTML + drei echte Stylesheets) sind
+Dazu vier Doc-Tests. Die taz.de-Fixtures (HTML + drei echte Stylesheets) sind
 committed, laufen also **offline** und deterministisch; der Live-Test gegen
 `https://taz.de` kommt mit `tb-browser` (Phase 10).
 
@@ -234,13 +238,23 @@ Durchstreichen), `<img>`-Platzhalter mit Berg-und-Sonne-Glyph plus `alt`-Text,
 PNG-Encoder (Signatur, `IHDR`, `tEXt`, `IDAT`, `IEND`) — das Ergebnis wird von
 Pythons `zlib` **und** PIL sauber gelesen.
 
-**Layout (🚧 geplant):** Block, Inline mit Wortumbruch, `inline-block`, Flexbox (row/column,
-wrap, grow/shrink/basis, `justify-content`, `align-items`, `gap`),
-`position: absolute|fixed|relative`, `overflow`, `z-index`-Reihenfolge.
+**Layout (✅ fertig):** Block (auto-Breite, `margin: auto`, `box-sizing`,
+Prozent, `min/max`, light Margin-Collapse), Inline-Flow mit Wortumbruch nach
+Font-Metriken, Brechen überlanger Wörter an UTF-8-Grenzen, `white-space`
+(normal/nowrap/pre/pre-wrap), `text-align` inkl. `justify`, `inline-block` und
+ersetzte Elemente im Textlauf, `float` (links/rechts, umflossener Text, `clear`),
+Flexbox (row/column/\*-reverse, wrap, grow/shrink, `flex-basis: auto` →
+Hauptachsendimension, alle `justify-content`-Werte, `align-items`/`align-self`
+inkl. `stretch`, row-/column-gap), `position: absolute|fixed|relative|sticky`
+(mit `left/right/top/bottom`-Stretching), Intrinsic Sizing
+(`min-content`/`max-content`/`fit-content`), `overflow`-Achsen bei der
+Scrollhöhe, Hit-Test (`element_at`, `elementFromPoint`, `link_at`).
 
-**Grenzen (bewusst):** kein CSS-Grid, keine Bilddekodierung, keine Web Fonts
-(font-family → Bitmap-Font), keine richtungsabhängige Typografie, `float` nur
-ansatzweise, keine echte parallele Skriptausführung, TLS = Fremdcrate.
+**Grenzen (bewusst):** kein CSS-Grid (taz nutzt keins), keine Bilddekodierung —
+`<img>` bekommt CSS-Maße, `width`/`height`-Attribute und Aspect-Ratio, sonst
+300×150; keine Web Fonts (font-family → Bitmap-Font, 5×7), keine
+richtungsabhängige Typografie (RTL), kein Tabellen-/`order`-Layout, keine echte
+parallele Skriptausführung, TLS = Fremdcrate.
 
 ---
 
@@ -268,6 +282,55 @@ Reihenfolge pro Element, von billig nach teuer:
 Der `L`-Typ ist der Grund, warum `calc(100% - 32px)`, `50vw` und `2rem` schon im
 Cascade fertig durchgerechnet werden können, ohne das Layout zu kennen — und
 warum `font-size: 1.5em` die echte Parent-Schriftgröße benutzt statt zu raten.
+
+---
+
+## 5.2 Wie das Layout funktioniert
+
+**Box-Baum** (`box_tree`): DOM × `display`. `display: none` wirft den Teilbaum
+weg, `inline-block`/`<img>`/`<input>` werden *atomare* Inline-Boxen, und
+anonyme Block-Boxen entstehen nur dort, wo CSS sie verlangt — nur *gemischte*
+Kinder (Inline neben Block). Ein Container, der ausschließlich Inline-Inhalte
+hat, bricht selbst die Zeilen (`inline_flow`), damit die Line-Boxes am
+echten Element hängen (`p.lines`) und nicht an einem Wrapper.
+
+**Maße** (`block`): ein Durchlauf von oben nach unten, der als einzigen Zustand
+den *Containing Block* (`Cb { rect, height_definite }`) mitnimmt. Alle
+Ergebnisse stehen in Dokument-Koordinaten, damit Maler und Hit-Test keine
+verschachtelten Koordinatensysteme nachführen müssen. Zwei Regeln sind dabei
+diskutabel wert:
+
+* `margin: auto` verteilt den *freien* Platz — `0 auto` zentriert, `auto 0`
+klemmt links an.
+* `height: 100 %` ist nur dann eine Höhe, wenn der Parent eine *definite* Höhe
+  hat. Sonst heißt es `auto` — und für `<img>` bedeutet `auto`: Aspect-Ratio
+  halten. Ohne diese Regel wären alle taz-Bilder viewport-hoch (1024 px), was
+  die Seite auf 88 000 px gestreckt hat; mit ihr sind es ~6 600 px.
+
+**Inline-Flow** (`inline`): vor dem Umbruch wird der Inline-Teilbaum zu Tokens
+geflach — Wörter, kollabierende Leerzeichen, erzwungene Umbrüche (`<br>`),
+atomare Boxen, Floats. Deshalb läuft `<b>`-Text *in der Zeile des Absatzes*
+(statt in einer eigenen) und behält seine Schrift. Der Pen wandert greedy, ein
+zu langes Wort wird an UTF-8-Grenzen zerteilt (nicht mitten in `ü`), Zeilen
+bekommen Baseline aus dem höchsten Fragment, `text-align`/`justify` verteilen am
+Schluss. Gemessen wird mit `tb_gfx::Font` — **dem** Rasterizer, der später
+malt: Layout und Pixel können gar nicht auseinanderlaufen.
+
+**Flexbox** (`flex`): `flex-basis: auto` heißt „Hauptachsendimension, sonst
+Inhalt“, der Rest ist Vektorrechnung: Überhang wird nach `grow`/`shrink·basis`
+verteilt, `wrap` schneidet Linien, `justify-content` setzt Startposition und
+Lücken, `align-items`/`align-self` (inkl. `stretch`) wirkt auf der Querachse.
+
+**Intrinsic Sizing** (`min_content`/`max_content`/`fit_width`): Floats und
+Flex-Items bekommen `clamp(max-content, min-content, verfügbar)` statt — wie in
+der ersten Version — in einer 0-px-Box gemessen zu werden. Das ist der
+Unterschied zwischen „jede Überschrift bricht nach einem Wort“ und einer Seite,
+die aussieht.
+
+**Out-of-Flow** (zweiter Pass): `absolute`/`fixed` werden erst gesetzt, wenn der
+normale Fluss steht — inklusive Stretching zwischen `left`/`right` und
+`top`/`bottom`. `float` dagegen wirkt im Fluss: der `FloatState` wandert durch
+dasselbe BFC mit, damit nachfolgende Absätze den Platz wirklich umfließen.
 
 ---
 
@@ -307,7 +370,7 @@ crates/
   tb-html/                 HTML-Tokenizer + TreeBuilder + Entities
   tb-css/                  CSS-Parser (Selektoren, Werte, @media), calc/var
   tb-style/                UA-Sheet, Matching, Kaskade, ComputedStyle
-  tb-layout/               BoxTree: Block/Inline/Flex/absolut, Hit-Test
+  tb-layout/               Box-Baum, Block/Inline/Flex, Intrinsic Sizing, Hit-Test
   tb-gfx/                  Framebuffer, Bitmap-Font, PNG-Encoder
   tb-js/                   JS-Engine: Lexer, Parser, Interpreter, EventLoop
   tb-dom-bindings/         window/document/Element/Events für JS

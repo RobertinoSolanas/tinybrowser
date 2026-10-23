@@ -241,9 +241,7 @@ impl Tokenizer {
                     let Some(c) = self.peek(0) else {
                         self.pos += 1;
                         self.state = State::Data;
-                        return Token::Text {
-                            text: "<".into(),
-                        };
+                        return Token::Text { text: "<".into() };
                     };
                     match c {
                         '!' => {
@@ -275,26 +273,24 @@ impl Tokenizer {
                     }
                 }
                 // ------------------------------------------------------------
-                State::EndTagOpen => {
-                    match self.peek(0) {
-                        Some('>') => {
-                            self.pos += 1;
-                            self.state = State::Data;
-                        }
-                        Some(c) if c.is_ascii_alphabetic() => {
-                            self.tag_name.clear();
-                            self.attrs.clear();
-                            self.self_closing = false;
-                            self.is_end_tag = true;
-                            self.state = State::TagName;
-                        }
-                        _ => {
-                            self.pos += 1;
-                            self.buf.clear();
-                            self.state = State::BogusComment;
-                        }
+                State::EndTagOpen => match self.peek(0) {
+                    Some('>') => {
+                        self.pos += 1;
+                        self.state = State::Data;
                     }
-                }
+                    Some(c) if c.is_ascii_alphabetic() => {
+                        self.tag_name.clear();
+                        self.attrs.clear();
+                        self.self_closing = false;
+                        self.is_end_tag = true;
+                        self.state = State::TagName;
+                    }
+                    _ => {
+                        self.pos += 1;
+                        self.buf.clear();
+                        self.state = State::BogusComment;
+                    }
+                },
                 // ------------------------------------------------------------
                 State::TagName => {
                     let Some(c) = self.peek(0) else {
@@ -472,18 +468,16 @@ impl Tokenizer {
                                     self.push_attr();
                                     return self.emit_tag();
                                 }
-                                '&' => {
-                                    match entities::decode_at(&self.input, self.pos) {
-                                        Some((s, n)) => {
-                                            self.attr_value.push_str(&s);
-                                            self.pos += n;
-                                        }
-                                        None => {
-                                            self.attr_value.push('&');
-                                            self.pos += 1;
-                                        }
+                                '&' => match entities::decode_at(&self.input, self.pos) {
+                                    Some((s, n)) => {
+                                        self.attr_value.push_str(&s);
+                                        self.pos += n;
                                     }
-                                }
+                                    None => {
+                                        self.attr_value.push('&');
+                                        self.pos += 1;
+                                    }
+                                },
                                 _ => {
                                     self.attr_value.push(if c == '\0' { '\u{fffd}' } else { c });
                                     self.pos += 1;
@@ -554,46 +548,42 @@ impl Tokenizer {
                     }
                 }
                 // ------------------------------------------------------------
-                State::BogusComment => {
-                    loop {
-                        let Some(c) = self.peek(0) else {
-                            self.pos += 1;
-                            self.state = State::Data;
-                            return Token::Comment {
-                                text: std::mem::take(&mut self.buf),
-                            };
-                        };
+                State::BogusComment => loop {
+                    let Some(c) = self.peek(0) else {
                         self.pos += 1;
-                        if c == '>' {
-                            self.state = State::Data;
-                            return Token::Comment {
-                                text: std::mem::take(&mut self.buf),
-                            };
-                        }
-                        self.buf.push(c);
+                        self.state = State::Data;
+                        return Token::Comment {
+                            text: std::mem::take(&mut self.buf),
+                        };
+                    };
+                    self.pos += 1;
+                    if c == '>' {
+                        self.state = State::Data;
+                        return Token::Comment {
+                            text: std::mem::take(&mut self.buf),
+                        };
                     }
-                }
+                    self.buf.push(c);
+                },
                 // ------------------------------------------------------------
-                State::Comment => {
-                    loop {
-                        let Some(c) = self.peek(0) else {
-                            self.pos += 1;
-                            self.state = State::Data;
-                            return Token::Comment {
-                                text: std::mem::take(&mut self.buf),
-                            };
-                        };
-                        if c == '-' && self.starts_with_at(self.pos, "-->") {
-                            self.pos += 3;
-                            self.state = State::Data;
-                            return Token::Comment {
-                                text: std::mem::take(&mut self.buf),
-                            };
-                        }
+                State::Comment => loop {
+                    let Some(c) = self.peek(0) else {
                         self.pos += 1;
-                        self.buf.push(c);
+                        self.state = State::Data;
+                        return Token::Comment {
+                            text: std::mem::take(&mut self.buf),
+                        };
+                    };
+                    if c == '-' && self.starts_with_at(self.pos, "-->") {
+                        self.pos += 3;
+                        self.state = State::Data;
+                        return Token::Comment {
+                            text: std::mem::take(&mut self.buf),
+                        };
                     }
-                }
+                    self.pos += 1;
+                    self.buf.push(c);
+                },
                 // ------------------------------------------------------------
                 State::DoctypeBeforeName => match self.peek(0) {
                     None => {
@@ -705,20 +695,18 @@ impl Tokenizer {
                         }
                     }
                 }
-                State::DoctypeBogus => {
-                    loop {
-                        let Some(c) = self.peek(0) else {
-                            self.pos += 1;
-                            self.state = State::Data;
-                            return self.emit_doctype();
-                        };
+                State::DoctypeBogus => loop {
+                    let Some(c) = self.peek(0) else {
                         self.pos += 1;
-                        if c == '>' {
-                            self.state = State::Data;
-                            return self.emit_doctype();
-                        }
+                        self.state = State::Data;
+                        return self.emit_doctype();
+                    };
+                    self.pos += 1;
+                    if c == '>' {
+                        self.state = State::Data;
+                        return self.emit_doctype();
                     }
-                }
+                },
                 // ------------------------------------------------------------
                 State::RawText => {
                     if self.raw == RawKind::Plaintext {
@@ -775,32 +763,30 @@ impl Tokenizer {
                     };
                 }
                 // ------------------------------------------------------------
-                State::CData => {
-                    loop {
-                        let Some(c) = self.peek(0) else {
-                            self.pos += 1;
-                            self.state = State::Data;
-                            let text = std::mem::take(&mut self.buf);
-                            return if text.is_empty() {
-                                Token::Eof
-                            } else {
-                                Token::Text { text }
-                            };
-                        };
-                        if c == ']' && self.starts_with_at(self.pos, "]]>") {
-                            self.pos += 3;
-                            self.state = State::Data;
-                            let text = std::mem::take(&mut self.buf);
-                            return if text.is_empty() {
-                                Token::Eof
-                            } else {
-                                Token::Text { text }
-                            };
-                        }
+                State::CData => loop {
+                    let Some(c) = self.peek(0) else {
                         self.pos += 1;
-                        self.buf.push(c);
+                        self.state = State::Data;
+                        let text = std::mem::take(&mut self.buf);
+                        return if text.is_empty() {
+                            Token::Eof
+                        } else {
+                            Token::Text { text }
+                        };
+                    };
+                    if c == ']' && self.starts_with_at(self.pos, "]]>") {
+                        self.pos += 3;
+                        self.state = State::Data;
+                        let text = std::mem::take(&mut self.buf);
+                        return if text.is_empty() {
+                            Token::Eof
+                        } else {
+                            Token::Text { text }
+                        };
                     }
-                }
+                    self.pos += 1;
+                    self.buf.push(c);
+                },
             }
         }
     }

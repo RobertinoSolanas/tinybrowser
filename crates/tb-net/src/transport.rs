@@ -4,12 +4,12 @@
 //! and TLS 1.3 from scratch would be the wrong kind of tiny). Everything above
 //! this module — framing, headers, chunked decoding, redirects — is ours.
 
-use tb_core::TbError;
 use crate::url::Url;
 use std::io::{Read, Write};
 use std::net::TcpStream;
 use std::time::Duration;
 use tb_core::Result;
+use tb_core::TbError;
 
 /// Either a plain or a TLS wrapped connection.
 pub enum Connection {
@@ -58,7 +58,9 @@ fn tls_config() -> std::sync::Arc<rustls::ClientConfig> {
     static CFG: OnceLock<std::sync::Arc<rustls::ClientConfig>> = OnceLock::new();
     CFG.get_or_init(|| {
         let mut roots = rustls::RootCertStore::empty();
-        roots.roots.extend(webpki_roots::TLS_SERVER_ROOTS.iter().cloned());
+        roots
+            .roots
+            .extend(webpki_roots::TLS_SERVER_ROOTS.iter().cloned());
         let provider = rustls::crypto::ring::default_provider();
         let cfg = rustls::ClientConfig::builder_with_provider(provider.into())
             .with_safe_default_protocol_versions()
@@ -139,7 +141,10 @@ pub fn request_and_read(
         let now = std::time::Instant::now();
         if now >= deadline {
             if buf.is_empty() {
-                return Err(TbError::Timeout(format!("{url}: no response within {} ms", timeout.as_millis())));
+                return Err(TbError::Timeout(format!(
+                    "{url}: no response within {} ms",
+                    timeout.as_millis()
+                )));
             }
             break;
         }

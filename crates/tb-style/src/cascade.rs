@@ -12,10 +12,10 @@ use std::collections::HashMap;
 use std::rc::Rc;
 use tb_core::{Color, Problems};
 use tb_css::ast::{Declaration, Rule, StyleSheet};
-use tb_css::value::DeclarationValue;
 use tb_css::calc::Resolved;
 use tb_css::media::Viewport;
 use tb_css::selector::{ComplexSelector, SelectorPart, Simple};
+use tb_css::value::DeclarationValue;
 use tb_css::value::{parse_value, Unit, Value};
 use tb_dom::{Dom, NodeId};
 
@@ -149,6 +149,11 @@ impl StyleMap {
             .map(|r| &**r)
     }
 
+    /// Shared handle — layout boxes keep the `Rc` instead of cloning the style.
+    pub fn rc(&self, id: NodeId) -> Option<Rc<ComputedStyle>> {
+        self.entries.get(id.idx_usize()).and_then(|o| o.clone())
+    }
+
     /// The computed style, or a neutral default for unstyled nodes.
     pub fn get_or_default(&self, id: NodeId) -> ComputedStyle {
         self.get(id).cloned().unwrap_or_else(ComputedStyle::initial)
@@ -181,7 +186,13 @@ pub fn compute(
     viewport: Viewport,
     state: &MatchState,
 ) -> Styled {
-    compute_with_attrs(dom, author_sheets, viewport, state, &AttrSheets::from_dom(dom))
+    compute_with_attrs(
+        dom,
+        author_sheets,
+        viewport,
+        state,
+        &AttrSheets::from_dom(dom),
+    )
 }
 
 /// Compute the style of every element.
@@ -198,9 +209,21 @@ pub fn compute_with_attrs(
     let mut flat: Vec<FlatRule<'_>> = Vec::new();
     let mut order = 0usize;
     let ua = ua_stylesheet();
-    collect_rules(&ua.rules, viewport, Origin::UserAgent, &mut order, &mut flat);
+    collect_rules(
+        &ua.rules,
+        viewport,
+        Origin::UserAgent,
+        &mut order,
+        &mut flat,
+    );
     for sheet in author_sheets {
-        collect_rules(&sheet.rules, viewport, Origin::Author, &mut order, &mut flat);
+        collect_rules(
+            &sheet.rules,
+            viewport,
+            Origin::Author,
+            &mut order,
+            &mut flat,
+        );
     }
 
     // 2. index by right-most compound key
@@ -394,21 +417,91 @@ fn candidate_ids(index: &HashMap<Key, Vec<usize>>, dom: &Dom, node: NodeId) -> V
 /// Stable property keys so the per-element map needs no allocation.
 fn intern(name: &str) -> &'static str {
     const KNOWN: &[&str] = &[
-        "display", "position", "box-sizing", "float", "clear", "width", "height", "min-width",
-        "max-width", "min-height", "max-height", "margin", "margin-top", "margin-right",
-        "margin-bottom", "margin-left", "padding", "padding-top", "padding-right",
-        "padding-bottom", "padding-left", "border", "border-top", "border-right", "border-bottom",
-        "border-left", "border-width", "border-style", "border-color", "border-radius", "top",
-        "right", "bottom", "left", "inset", "z-index", "overflow", "overflow-x", "overflow-y",
-        "visibility", "opacity", "color", "background", "background-color", "background-image",
-        "font", "font-family", "font-size", "font-weight", "font-style", "line-height",
-        "text-align", "text-decoration", "text-decoration-line", "text-transform", "white-space",
-        "letter-spacing", "word-spacing", "vertical-align", "flex", "flex-direction", "flex-wrap",
-        "flex-grow", "flex-shrink", "flex-basis", "justify-content", "align-items", "align-self",
-        "align-content", "gap", "row-gap", "column-gap", "list-style", "list-style-type",
-        "content", "cursor", "transition", "animation", "transform",
+        "display",
+        "position",
+        "box-sizing",
+        "float",
+        "clear",
+        "width",
+        "height",
+        "min-width",
+        "max-width",
+        "min-height",
+        "max-height",
+        "margin",
+        "margin-top",
+        "margin-right",
+        "margin-bottom",
+        "margin-left",
+        "padding",
+        "padding-top",
+        "padding-right",
+        "padding-bottom",
+        "padding-left",
+        "border",
+        "border-top",
+        "border-right",
+        "border-bottom",
+        "border-left",
+        "border-width",
+        "border-style",
+        "border-color",
+        "border-radius",
+        "top",
+        "right",
+        "bottom",
+        "left",
+        "inset",
+        "z-index",
+        "overflow",
+        "overflow-x",
+        "overflow-y",
+        "visibility",
+        "opacity",
+        "color",
+        "background",
+        "background-color",
+        "background-image",
+        "font",
+        "font-family",
+        "font-size",
+        "font-weight",
+        "font-style",
+        "line-height",
+        "text-align",
+        "text-decoration",
+        "text-decoration-line",
+        "text-transform",
+        "white-space",
+        "letter-spacing",
+        "word-spacing",
+        "vertical-align",
+        "flex",
+        "flex-direction",
+        "flex-wrap",
+        "flex-grow",
+        "flex-shrink",
+        "flex-basis",
+        "justify-content",
+        "align-items",
+        "align-self",
+        "align-content",
+        "gap",
+        "row-gap",
+        "column-gap",
+        "list-style",
+        "list-style-type",
+        "content",
+        "cursor",
+        "transition",
+        "animation",
+        "transform",
     ];
-    KNOWN.iter().copied().find(|k| *k == name).unwrap_or("_unknown")
+    KNOWN
+        .iter()
+        .copied()
+        .find(|k| *k == name)
+        .unwrap_or("_unknown")
 }
 
 /// Flatten a rule list, evaluating `@media` against the viewport.
@@ -572,7 +665,12 @@ fn apply(
         apply_font_shorthand(style, &c.decl.value, parent_size, viewport);
     }
     if let Some(c) = props.get("line-height") {
-        style.line_height = line_height_of(&substitute(&c.text(), &lookup), style.font_size, &res, &lookup);
+        style.line_height = line_height_of(
+            &substitute(&c.text(), &lookup),
+            style.font_size,
+            &res,
+            &lookup,
+        );
     }
     if let Some(c) = props.get("text-align") {
         style.text_align = match substitute(&c.text(), &lookup).as_str() {
@@ -642,8 +740,10 @@ fn apply(
         );
     }
     if let Some(c) = props.get("visibility") {
-        style.visibility =
-            !matches!(substitute(&c.text(), &lookup).as_str(), "hidden" | "collapse");
+        style.visibility = !matches!(
+            substitute(&c.text(), &lookup).as_str(),
+            "hidden" | "collapse"
+        );
     }
     if let Some(c) = props.get("opacity") {
         if let Some(n) = c.one().and_then(|v| v.as_number()) {
@@ -1156,7 +1256,12 @@ fn spread4(nums: Vec<f32>) -> [f32; 4] {
 ///
 /// Works on the parsed value parts: the serialiser keeps `/` as its own token,
 /// so a plain whitespace split would misread the size.
-fn apply_font_shorthand(style: &mut ComputedStyle, dv: &DeclarationValue, parent: f32, viewport: Viewport) {
+fn apply_font_shorthand(
+    style: &mut ComputedStyle,
+    dv: &DeclarationValue,
+    parent: f32,
+    viewport: Viewport,
+) {
     let lookup: Lookup = &|_| None;
     let mut size: Option<Value> = None;
     let mut line: Option<Value> = None;
@@ -1402,11 +1507,15 @@ fn linear(v: &Value, res: &Resolved, lookup: &dyn Fn(&str) -> Option<String>) ->
                     T::Length(n, Unit::Percent, mul) => (sign * n * mul, 0.0),
                     T::Length(n, u, mul) => (0.0, sign * res.length(*n, *u) * mul),
                     T::Number(n) => (0.0, sign * n),
-                    T::Calc(inner, mul) => match linear(&Value::Calc((**inner).clone()), res, lookup) {
-                        Some(L::Px(p)) => (0.0, sign * p * mul),
-                        Some(L::Linear { pct: p, fixed: f }) => (sign * p * mul, sign * f * mul),
-                        _ => (0.0, 0.0),
-                    },
+                    T::Calc(inner, mul) => {
+                        match linear(&Value::Calc((**inner).clone()), res, lookup) {
+                            Some(L::Px(p)) => (0.0, sign * p * mul),
+                            Some(L::Linear { pct: p, fixed: f }) => {
+                                (sign * p * mul, sign * f * mul)
+                            }
+                            _ => (0.0, 0.0),
+                        }
+                    }
                     T::Var {
                         name,
                         fallback,
@@ -1421,7 +1530,9 @@ fn linear(v: &Value, res: &Resolved, lookup: &dyn Fn(&str) -> Option<String>) ->
                             .and_then(|p| linear(p, res, lookup))
                         {
                             Some(L::Px(p)) => (0.0, sign * p * mul),
-                            Some(L::Linear { pct: p, fixed: f }) => (sign * p * mul, sign * f * mul),
+                            Some(L::Linear { pct: p, fixed: f }) => {
+                                (sign * p * mul, sign * f * mul)
+                            }
                             _ => (0.0, 0.0),
                         }
                     }
@@ -1456,9 +1567,9 @@ fn linear(v: &Value, res: &Resolved, lookup: &dyn Fn(&str) -> Option<String>) ->
                 ("min", n) if n >= 2 => {
                     Some(L::Px(nums.iter().cloned().fold(f32::INFINITY, f32::min)))
                 }
-                ("max", n) if n >= 2 => {
-                    Some(L::Px(nums.iter().cloned().fold(f32::NEG_INFINITY, f32::max)))
-                }
+                ("max", n) if n >= 2 => Some(L::Px(
+                    nums.iter().cloned().fold(f32::NEG_INFINITY, f32::max),
+                )),
                 ("clamp", 3) => Some(L::Px(nums[0].max(nums[1]).min(nums[2]))),
                 _ => None,
             }

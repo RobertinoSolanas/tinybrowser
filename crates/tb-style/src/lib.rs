@@ -22,10 +22,10 @@ mod computed;
 mod matcher;
 mod ua;
 
-pub use cascade::{compute, compute_with_attrs, AttrSheets, Origin, Styled, StyleMap};
+pub use cascade::{compute, compute_with_attrs, AttrSheets, Origin, StyleMap, Styled};
 pub use computed::{
-    AlignItems, BorderStyle, ComputedStyle, Display, FlexDirection, JustifyContent, L, Overflow,
-    Position, TextAlign, TextTransform, WhiteSpace,
+    AlignItems, BorderStyle, ComputedStyle, Display, FlexDirection, JustifyContent, Overflow,
+    Position, TextAlign, TextTransform, WhiteSpace, L,
 };
 pub use matcher::{matches, matches_compound, nth, nth_hit, MatchState};
 pub use ua::{ua_stylesheet, UA_CSS};
@@ -132,8 +132,7 @@ pub fn resolve_sources(
                 .filter_map(|r| match r {
                     tb_css::Rule::Import { url, media } => {
                         if url.is_empty()
-                            || (!media.is_empty()
-                                && !media.iter().any(|q| q.matches(&viewport)))
+                            || (!media.is_empty() && !media.iter().any(|q| q.matches(&viewport)))
                         {
                             return None;
                         }
@@ -180,7 +179,13 @@ impl StyleEngine {
     /// Cascade the UA sheet, the given author sheets and all `style=""`
     /// attributes over the document.
     pub fn style_document(&self, dom: &tb_dom::Dom, sheets: &[StyleSheet]) -> Styled {
-        compute_with_attrs(dom, sheets, self.viewport, &self.state, &AttrSheets::from_dom(dom))
+        compute_with_attrs(
+            dom,
+            sheets,
+            self.viewport,
+            &self.state,
+            &AttrSheets::from_dom(dom),
+        )
     }
 }
 
@@ -224,10 +229,15 @@ mod tests {
         let mut problems = tb_core::Problems::new();
         let dom = styled("<style>@import url(base.css); h1{color:red}</style>");
         let sources = collect_sources(&dom);
-        let sheets = resolve_sources(&sources, vp(), |href| match href {
-            "base.css" => Some("body{margin:0}".to_string()),
-            _ => None,
-        }, &mut problems);
+        let sheets = resolve_sources(
+            &sources,
+            vp(),
+            |href| match href {
+                "base.css" => Some("body{margin:0}".to_string()),
+                _ => None,
+            },
+            &mut problems,
+        );
         assert_eq!(sheets.len(), 2);
         assert_eq!(sheets[0].style_rule_count(), 1);
         assert_eq!(sheets[1].style_rule_count(), 1);
@@ -258,7 +268,10 @@ mod tests {
         let out = engine.style_document(&dom, &sheets);
         let h1 = dom.get_elements_by_tag("h1")[0];
         let p = dom.get_elements_by_tag("p")[0];
-        assert_eq!(out.styles.get(h1).unwrap().color, tb_core::Color::rgb(255, 0, 0));
+        assert_eq!(
+            out.styles.get(h1).unwrap().color,
+            tb_core::Color::rgb(255, 0, 0)
+        );
         assert_eq!(out.styles.get(h1).unwrap().display, Display::Block);
         assert_eq!(out.styles.get(p).unwrap().font_size, 20.0);
         assert_eq!(out.styles.get(p).unwrap().display, Display::Block);

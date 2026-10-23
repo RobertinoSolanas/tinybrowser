@@ -176,7 +176,10 @@ impl Problems {
             out.push('\n');
         }
         if self.dropped > 0 {
-            out.push_str(&format!("... {} further problems suppressed\n", self.dropped));
+            out.push_str(&format!(
+                "... {} further problems suppressed\n",
+                self.dropped
+            ));
         }
         out
     }

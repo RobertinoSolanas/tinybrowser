@@ -118,7 +118,13 @@ pub fn parse_http_date(s: &str) -> Option<i64> {
     let day: i64 = it.next()?.parse().ok()?;
     let month = it.next()?.to_ascii_lowercase();
     let year: i64 = it.next()?.parse().ok()?;
-    let year = if year < 70 { year + 2000 } else if year < 1000 { year } else { year };
+    let year = if year < 70 {
+        year + 2000
+    } else if year < 1000 {
+        year
+    } else {
+        year
+    };
     let month = match month.get(..3)? {
         "jan" => 1,
         "feb" => 2,
@@ -181,7 +187,8 @@ impl CookieJar {
     }
 
     pub fn insert(&mut self, c: Cookie) {
-        self.cookies.retain(|x| !(x.name == c.name && x.domain == c.domain && x.path == c.path));
+        self.cookies
+            .retain(|x| !(x.name == c.name && x.domain == c.domain && x.path == c.path));
         if !c.is_expired(now_unix()) {
             self.cookies.push(c);
         }
@@ -254,10 +261,7 @@ mod tests {
     fn stores_and_sends_matching_cookies() {
         let mut jar = CookieJar::new();
         let u = url("https://taz.de/Nachrichten/Index.html");
-        jar.store_from_response(
-            &header(&[("set-cookie", "sid=abc; Path=/; Secure")]),
-            &u,
-        );
+        jar.store_from_response(&header(&[("set-cookie", "sid=abc; Path=/; Secure")]), &u);
         assert_eq!(jar.len(), 1);
         assert_eq!(jar.header_for(&u).as_deref(), Some("sid=abc"));
         // other domain does not get it
@@ -301,7 +305,10 @@ mod tests {
     fn http_date_parsing() {
         // Thu, 01 Jan 1970 00:00:00 GMT
         assert_eq!(parse_http_date("Thu, 01 Jan 1970 00:00:00 GMT"), Some(0));
-        assert_eq!(parse_http_date("Mon, 02 Jan 2024 15:04:05 GMT"), Some(1_704_207_845));
+        assert_eq!(
+            parse_http_date("Mon, 02 Jan 2024 15:04:05 GMT"),
+            Some(1_704_207_845)
+        );
         assert_eq!(parse_http_date("nonsense"), None);
     }
 

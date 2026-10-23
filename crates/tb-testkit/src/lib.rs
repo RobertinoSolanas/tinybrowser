@@ -152,12 +152,18 @@ impl TestServer {
     pub fn start() -> TestServer {
         let listener = TcpListener::bind("127.0.0.1:0").expect("bind test server");
         let addr = listener.local_addr().expect("local addr");
-        let routes: Arc<RwLock<HashMap<String, StubResponse>>> = Arc::new(RwLock::new(HashMap::new()));
+        let routes: Arc<RwLock<HashMap<String, StubResponse>>> =
+            Arc::new(RwLock::new(HashMap::new()));
         let requests: Arc<Mutex<Vec<RecordedRequest>>> = Arc::new(Mutex::new(Vec::new()));
         let stop = Arc::new(AtomicBool::new(false));
         let connections = Arc::new(AtomicUsize::new(0));
 
-        let (r2, q2, s2, c2) = (routes.clone(), requests.clone(), stop.clone(), connections.clone());
+        let (r2, q2, s2, c2) = (
+            routes.clone(),
+            requests.clone(),
+            stop.clone(),
+            connections.clone(),
+        );
         let worker = thread::spawn(move || {
             let _ = listener.set_nonblocking(true);
             loop {
@@ -192,10 +198,7 @@ impl TestServer {
 
     /// Register the response for an exact path (`/index.html`).
     pub fn route(&mut self, path: &str, resp: StubResponse) -> &mut Self {
-        self.routes
-            .write()
-            .unwrap()
-            .insert(path.to_string(), resp);
+        self.routes.write().unwrap().insert(path.to_string(), resp);
         self
     }
 
@@ -218,10 +221,7 @@ impl TestServer {
     }
 
     pub fn paths_requested(&self) -> Vec<String> {
-        self.requests()
-            .iter()
-            .map(|r| r.path.clone())
-            .collect()
+        self.requests().iter().map(|r| r.path.clone()).collect()
     }
 
     pub fn connections(&self) -> usize {
@@ -326,11 +326,7 @@ fn write_response(sock: &mut TcpStream, resp: &StubResponse) -> std::io::Result<
     } else {
         resp.body.clone()
     };
-    let mut head = format!(
-        "HTTP/1.1 {} {}\r\n",
-        resp.status,
-        reason(resp.status)
-    );
+    let mut head = format!("HTTP/1.1 {} {}\r\n", resp.status, reason(resp.status));
     let mut sent_content_length = false;
     for (k, v) in &resp.headers {
         if k.eq_ignore_ascii_case("content-length") {
@@ -382,7 +378,8 @@ mod tests {
         let mut s = TestServer::start();
         s.route("/a", StubResponse::html("<p>hi</p>"));
         let mut sock = TcpStream::connect(s.addr).unwrap();
-        sock.write_all(b"GET /a HTTP/1.1\r\nHost: x\r\n\r\n").unwrap();
+        sock.write_all(b"GET /a HTTP/1.1\r\nHost: x\r\n\r\n")
+            .unwrap();
         let mut out = String::new();
         sock.read_to_string(&mut out).unwrap();
         assert!(out.starts_with("HTTP/1.1 200 OK"), "{out}");
@@ -395,7 +392,8 @@ mod tests {
     fn unknown_path_is_404() {
         let s = TestServer::start();
         let mut sock = TcpStream::connect(s.addr).unwrap();
-        sock.write_all(b"GET /nope HTTP/1.1\r\nHost: x\r\n\r\n").unwrap();
+        sock.write_all(b"GET /nope HTTP/1.1\r\nHost: x\r\n\r\n")
+            .unwrap();
         let mut out = String::new();
         sock.read_to_string(&mut out).unwrap();
         assert!(out.starts_with("HTTP/1.1 404"));

@@ -113,16 +113,21 @@ fn taz_display_none_is_used_for_hidden_chrome() {
     let hidden = d
         .elements()
         .iter()
-        .filter(|n| out.styles.get(**n).map(|s| s.display == Display::None).unwrap_or(false))
+        .filter(|n| {
+            out.styles
+                .get(**n)
+                .map(|s| s.display == Display::None)
+                .unwrap_or(false)
+        })
         .count();
     // <head> children alone guarantee a bunch, and swiper/shariff hide more
-    assert!(hidden > 20, "expected some display:none elements, got {hidden}");
+    assert!(
+        hidden > 20,
+        "expected some display:none elements, got {hidden}"
+    );
     // ...but the page must stay mostly visible
     let total = d.elements().len();
-    assert!(
-        hidden * 2 < total,
-        "too much hidden: {hidden}/{total}"
-    );
+    assert!(hidden * 2 < total, "too much hidden: {hidden}/{total}");
 }
 
 #[test]

@@ -29,10 +29,7 @@ pub fn parse_rule(css: &str) -> Option<Rule> {
 /// Parse a bare declaration list — the content of a `style=""` attribute.
 pub fn parse_declarations(css: &str) -> Vec<Declaration> {
     let chars: Vec<char> = css.chars().collect();
-    let mut p = Parser {
-        c: &chars,
-        i: 0,
-    };
+    let mut p = Parser { c: &chars, i: 0 };
     let (declarations, _nested) = p.parse_block_body();
     declarations
 }
@@ -61,7 +58,8 @@ mod decl_list_tests {
 
     #[test]
     fn tolerant_of_junk_and_urls() {
-        let d = parse_declarations(";;background:url(data:image/png;base64,AAA); : nope; color:red");
+        let d =
+            parse_declarations(";;background:url(data:image/png;base64,AAA); : nope; color:red");
         assert_eq!(d.len(), 2, "{d:?}");
         assert_eq!(d[1].name, "color");
     }
@@ -622,12 +620,16 @@ mod tests {
             "@import url(\"base.css\") screen; @font-face { font-family: X; src: url(a.woff); }",
         );
         assert_eq!(sheet.imports(), vec!["base.css".to_string()]);
-        assert!(matches!(&sheet.rules[1], Rule::FontFace { declarations } if declarations.len() == 2));
+        assert!(
+            matches!(&sheet.rules[1], Rule::FontFace { declarations } if declarations.len() == 2)
+        );
     }
 
     #[test]
     fn broken_css_is_skipped_not_fatal() {
-        let sheet = parse_stylesheet("a { color: } .b { color: red } .broken { color: rgb( } .c{color:blue}");
+        let sheet = parse_stylesheet(
+            "a { color: } .b { color: red } .broken { color: rgb( } .c{color:blue}",
+        );
         let css = sheet.debug_dump();
         assert!(css.contains(".b"), "{css}");
         assert!(css.contains(".c"), "{css}");
@@ -644,14 +646,18 @@ mod tests {
 
     #[test]
     fn supports_and_layer_are_applied() {
-        let sheet = parse_stylesheet("@supports (display: grid) { .g { color: red } } @layer base { .l { color: blue } }");
+        let sheet = parse_stylesheet(
+            "@supports (display: grid) { .g { color: red } } @layer base { .l { color: blue } }",
+        );
         let dump = sheet.debug_dump();
         assert!(dump.contains(".g") && dump.contains(".l"), "{dump}");
     }
 
     #[test]
     fn nested_css_rules() {
-        let sheet = parse_stylesheet(".card { color: red; &:hover { color: blue } > .title { font-weight: bold } }");
+        let sheet = parse_stylesheet(
+            ".card { color: red; &:hover { color: blue } > .title { font-weight: bold } }",
+        );
         match &sheet.rules[0] {
             Rule::Style(s) => {
                 assert_eq!(s.declarations.len(), 1);

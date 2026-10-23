@@ -110,18 +110,36 @@ Legende: `[ ]` = offen, `[x]` = DONE, `[~]` = teilweise / später verfeinert.
 
 ## 6. Context `presentation` — Layout (`tb-layout`)
 
-- [ ] **T6.1** Box-Tree aus DOM + ComputedStyle (block/inline/inline-block/none/text)
-- [ ] **T6.2** Block-Layout: containing block, auto-Breiten, margin-collapse (light),
-      padding/border, `min/max-width/height`, Auto-Margins (zentrieren)
-- [ ] **T6.3** Inline-Layout: Wort-Brechen mit Bitmap-Font-Metriken, Line-Boxes,
-      `text-align`, `white-space` (normal/nowrap/pre), Uppercase/Lowercase
-- [ ] **T6.4** Flexbox-Light: row/column, wrap, flex-grow/shrink/basis,
-      justify-content, align-items, gap (reicht für taz-Layouts)
-- [ ] **T6.5** absolute/fixed/sticky-Positionierung, `overflow` (clip + Scrollhöhe),
-      `z-index`-Malreihenfolge
-- [ ] **T6.6** Dokument-Größe / Scroll extents + Hit-Test-Helfer (`element_at(x,y)`)
-- [ ] **T6.7** Tests: Box-Maße harter Fälle (auto width, 50%, em, centered box),
-      Inline-Zeilen, Flex-Zeilen mit grow, absolut positionierte Boxen, none-Subtree
+- [x] **T6.1** Box-Tree aus DOM + ComputedStyle (block/inline/inline-block/none/text)
+      — `display:none`-Teilbäume fallen weg, gemischte Inhalte bekommen anonyme
+      Block-Wrapper, nur rein-Inline-Container broken selbst die Zeilen (`inline_flow`)
+- [x] **T6.2** Block-Layout: containing block (`Cb` + *definite*-Height-Regel),
+      auto-Breiten, `margin: 0 auto`, L/TR-Breite, `box-sizing`, Padding/Border,
+      `min/max-width/height`, leichte Margin- Collapse benachbarter Blöcke
+- [x] **T6.3** Inline-Layout: gephasteter Inline-Flow (Wörter, kollabierende
+      Leerzeichen, `<br>`, verschachtelte Inline-Elemente laufen in einer Zeile),
+      Brechen überlanger Wörter an UTF-8-Grenzen, Line-Boxes mit Baseline,
+      `text-align` (left/center/right/justify), `white-space`
+      (normal/nowrap/pre/pre-wrap), `text-transform`
+- [~] **T6.4** Flexbox-Light: row/column/\*-reverse, wrap, grow/shrink,
+      `flex-basis: auto` → Hauptachsendimension, justify-content (alle Werte),
+      align-items/align-self inkl. stretch, row-/column-gap
+      **Bekannte Lücken:** kein echtes `order`, keine `basis %`-Edge-Cases,
+      verschachtelte prozentuale Flex-Breiten auf Bulma-Seiten weichen ab
+- [x] **T6.5** absolute/fixed/sticky-Positionierung (zweiter Pass inkl.
+      left/right/top/bottom-Stretching), `overflow`-Achsen beachten die Scrollhöhe,
+      relative Verschiebung
+- [x] **T6.6** Dokument-Größe / Scroll extents + Hit-Test (`element_at`, `hit_test`,
+      `link_at`) — Hit-Test liefert Text-Run und die verlinkte Elementkette
+- [x] **T6.7** Intrinsic Sizing: `min-content`/`max-content`/`fit-content` für
+      Floats und Flex-Items (ersetzt das alte „breite = 0“-Messen)
+- [x] **T6.8** Tests: 36 Layout-Fälle (auto width, 50 %, box-sizing, zentrierte Box,
+      Umbruch, nowrap, pre, align, inline-block, float, flex row/column/wrap/gap,
+      justify/align, absolute/fixed/relative, none-Subtree, Hit-Test, NaN-Freiheit)
+      + 7 taz-Fixtur-Tests (1280/768/375 px, endliche Geometrie, Link-Treffer,
+      Reflow, Laufzeit)
+- [ ] **T6.9** Nach Arbeitstag: CSS Grid (taz nutzt keins), echte Bildmetriken
+      (Aspect-Ratio aus WebP-Header), `line-height`-Exponenten, Tabellen-Layout
 
 ## 7. Context `scripting` — JavaScript (`tb-js`)
 

@@ -18,7 +18,7 @@ pub mod value;
 
 pub use ast::{Declaration, Rule, StyleRule, StyleSheet};
 pub use media::{MediaQuery, Viewport};
-pub use tb_core::ColorScheme;
 pub use parser::{extract_url, parse_declarations, parse_rule, parse_stylesheet};
 pub use selector::{parse_selector_list, ComplexSelector, Simple, Specificity};
+pub use tb_core::ColorScheme;
 pub use value::{parse_value, DeclarationValue, Unit, Value};

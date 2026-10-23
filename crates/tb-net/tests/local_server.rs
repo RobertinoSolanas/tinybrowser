@@ -13,7 +13,10 @@ fn client() -> HttpClient {
 #[test]
 fn gets_a_plain_page() {
     let mut server = TestServer::start();
-    server.route("/index.html", StubResponse::html("<html><body>hi</body></html>"));
+    server.route(
+        "/index.html",
+        StubResponse::html("<html><body>hi</body></html>"),
+    );
     let c = client();
     let url = Url::parse(&server.url("/index.html")).unwrap();
     let r = c.fetch(&url).unwrap();
@@ -48,7 +51,10 @@ fn stops_after_too_many_redirects() {
     let c = client();
     let url = Url::parse(&server.url("/loop")).unwrap();
     let e = c.fetch(&url).unwrap_err();
-    assert!(matches!(e, tb_core::TbError::TooManyRedirects { .. }), "{e}");
+    assert!(
+        matches!(e, tb_core::TbError::TooManyRedirects { .. }),
+        "{e}"
+    );
 }
 
 #[test]
@@ -57,7 +63,9 @@ fn decodes_chunked_bodies() {
     let big = "x".repeat(500);
     server.route("/chunked", StubResponse::html(big.clone()).chunked());
     let c = client();
-    let r = c.fetch(&Url::parse(&server.url("/chunked")).unwrap()).unwrap();
+    let r = c
+        .fetch(&Url::parse(&server.url("/chunked")).unwrap())
+        .unwrap();
     assert_eq!(r.text.as_deref().unwrap().len(), big.len());
 }
 
@@ -65,7 +73,12 @@ fn decodes_chunked_bodies() {
 fn inflates_gzip_content_encoding() {
     let mut server = TestServer::start();
     let body = "taz.de gzip test ".repeat(50);
-    server.route("/gz", StubResponse::html(body.clone()).gzipped().with_header("content-encoding", "gzip"));
+    server.route(
+        "/gz",
+        StubResponse::html(body.clone())
+            .gzipped()
+            .with_header("content-encoding", "gzip"),
+    );
     let c = client();
     let r = c.fetch(&Url::parse(&server.url("/gz")).unwrap()).unwrap();
     assert_eq!(r.text.as_deref(), Some(body.as_str()));
@@ -75,7 +88,9 @@ fn inflates_gzip_content_encoding() {
 fn non_success_status_is_an_error_with_context() {
     let server = TestServer::start();
     let c = client();
-    let e = c.fetch(&Url::parse(&server.url("/missing")).unwrap()).unwrap_err();
+    let e = c
+        .fetch(&Url::parse(&server.url("/missing")).unwrap())
+        .unwrap_err();
     match e {
         tb_core::TbError::HttpStatus { status, url } => {
             assert_eq!(status, 404);
@@ -97,8 +112,10 @@ fn sends_cookies_back_and_forth() {
         StubResponse::html("<p id=u>...</p>").with_header("cache-control", "no-store"),
     );
     let c = client();
-    c.fetch(&Url::parse(&server.url("/login")).unwrap()).unwrap();
-    c.fetch(&Url::parse(&server.url("/profile")).unwrap()).unwrap();
+    c.fetch(&Url::parse(&server.url("/login")).unwrap())
+        .unwrap();
+    c.fetch(&Url::parse(&server.url("/profile")).unwrap())
+        .unwrap();
     let profile = server
         .requests()
         .into_iter()
@@ -120,7 +137,11 @@ fn second_request_is_served_from_cache() {
     let second = c.fetch(&url).unwrap();
     assert!(!first.from_cache);
     assert!(second.from_cache);
-    assert_eq!(server.request_count(), 1, "cached response must not hit the wire");
+    assert_eq!(
+        server.request_count(),
+        1,
+        "cached response must not hit the wire"
+    );
 }
 
 #[test]

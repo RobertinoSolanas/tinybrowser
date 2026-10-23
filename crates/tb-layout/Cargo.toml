@@ -10,5 +10,10 @@ authors.workspace = true
 [dependencies]
 tb-core.workspace = true
 tb-dom.workspace = true
+tb-css.workspace = true
 tb-style.workspace = true
 tb-gfx.workspace = true
+
+[dev-dependencies]
+tb-html.workspace = true
+tb-core.workspace = true

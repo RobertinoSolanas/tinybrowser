@@ -65,7 +65,14 @@ fn self_closing_and_void_elements() {
         }
         o => panic!("{o:?}"),
     }
-    assert_eq!(t[1], Token::StartTag { name: "br".into(), attrs: vec![], self_closing: false });
+    assert_eq!(
+        t[1],
+        Token::StartTag {
+            name: "br".into(),
+            attrs: vec![],
+            self_closing: false
+        }
+    );
 }
 
 #[test]
@@ -79,13 +86,23 @@ fn comments_and_doctype() {
             system_id: "".into()
         }
     );
-    assert_eq!(t[1], Token::Comment { text: " note ".into() });
+    assert_eq!(
+        t[1],
+        Token::Comment {
+            text: " note ".into()
+        }
+    );
 }
 
 #[test]
 fn unterminated_comment_ends_at_eof() {
     let t = tokens("<!-- never closed");
-    assert_eq!(t[0], Token::Comment { text: " never closed".into() });
+    assert_eq!(
+        t[0],
+        Token::Comment {
+            text: " never closed".into()
+        }
+    );
 }
 
 #[test]
@@ -107,7 +124,14 @@ fn raw_text_in_script_keeps_markup_characters() {
     let t = tokens(src);
     // the tree builder will drive the raw text switch; here we only check that
     // a plain tokenizer sees the script tag and then text
-    assert_eq!(t[0], Token::StartTag { name: "script".into(), attrs: vec![], self_closing: false });
+    assert_eq!(
+        t[0],
+        Token::StartTag {
+            name: "script".into(),
+            attrs: vec![],
+            self_closing: false
+        }
+    );
 }
 
 #[test]
@@ -115,7 +139,11 @@ fn raw_text_mode_stops_at_the_matching_end_tag_only() {
     let mut t = Tokenizer::new("<script>var s = '</div>'; var y = 2;</script><p>x</p>");
     assert_eq!(
         t.next_token(),
-        Token::StartTag { name: "script".into(), attrs: vec![], self_closing: false }
+        Token::StartTag {
+            name: "script".into(),
+            attrs: vec![],
+            self_closing: false
+        }
     );
     t.switch_to_raw_text(RawKind::Script, "script");
     assert_eq!(
@@ -124,8 +152,20 @@ fn raw_text_mode_stops_at_the_matching_end_tag_only() {
             text: "var s = '</div>'; var y = 2;".into()
         }
     );
-    assert_eq!(t.next_token(), Token::EndTag { name: "script".into() });
-    assert_eq!(t.next_token(), Token::StartTag { name: "p".into(), attrs: vec![], self_closing: false });
+    assert_eq!(
+        t.next_token(),
+        Token::EndTag {
+            name: "script".into()
+        }
+    );
+    assert_eq!(
+        t.next_token(),
+        Token::StartTag {
+            name: "p".into(),
+            attrs: vec![],
+            self_closing: false
+        }
+    );
 }
 
 #[test]
@@ -181,7 +221,10 @@ fn block_elements_close_paragraphs() {
     let dom = parse_document("<p>text<div>block</div>after");
     let p = dom.get_elements_by_tag("p").remove(0);
     let div = dom.get_elements_by_tag("div").remove(0);
-    assert_eq!(dom.parent(div), Some(dom.get_elements_by_tag("body").remove(0)));
+    assert_eq!(
+        dom.parent(div),
+        Some(dom.get_elements_by_tag("body").remove(0))
+    );
     assert_eq!(dom.text_content(p), "text");
 }
 
@@ -248,10 +291,16 @@ fn unclosed_tags_close_at_the_parent_end() {
     let dom = parse_document("<div><span>a<b>c</div><p>x</p>");
     let div = dom.get_elements_by_tag("div").remove(0);
     let p = dom.get_elements_by_tag("p").remove(0);
-    assert_eq!(dom.parent(div), Some(dom.get_elements_by_tag("body").remove(0)));
+    assert_eq!(
+        dom.parent(div),
+        Some(dom.get_elements_by_tag("body").remove(0))
+    );
     // </div> closed div, span and b
     assert_eq!(dom.text_content(div), "ac");
-    assert_eq!(dom.parent(p), Some(dom.get_elements_by_tag("body").remove(0)));
+    assert_eq!(
+        dom.parent(p),
+        Some(dom.get_elements_by_tag("body").remove(0))
+    );
 }
 
 #[test]
@@ -295,10 +344,7 @@ fn svg_content_keeps_self_closing_and_namespace() {
     // <p> breaks out of svg
     let p = dom.get_elements_by_tag("p").remove(0);
     assert_eq!(dom.tag(dom.parent(p).unwrap()), Some("div"));
-    assert_eq!(
-        dom.element(svg).unwrap().namespace,
-        tb_dom::Namespace::Svg
-    );
+    assert_eq!(dom.element(svg).unwrap().namespace, tb_dom::Namespace::Svg);
 }
 
 #[test]
@@ -332,10 +378,7 @@ fn script_content_is_preserved_verbatim() {
 fn inline_event_handler_attributes_survive() {
     let dom = parse_document(r#"<button onclick="doIt('a<b')">go</button>"#);
     let b = dom.get_elements_by_tag("button").remove(0);
-    assert_eq!(
-        dom.attr(b, "onclick").as_deref(),
-        Some("doIt('a<b')")
-    );
+    assert_eq!(dom.attr(b, "onclick").as_deref(), Some("doIt('a<b')"));
 }
 
 #[test]

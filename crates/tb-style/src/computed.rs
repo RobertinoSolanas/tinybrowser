@@ -19,6 +19,17 @@ pub enum L {
 }
 
 impl L {
+    /// True when the length does not depend on the containing block, i.e. it can
+    /// be resolved without knowing the parent's size. Percentages need a
+    /// *definite* containing block, otherwise CSS treats them as `auto`.
+    pub fn is_definite(&self) -> bool {
+        match self {
+            L::Auto => false,
+            L::Px(_) => true,
+            L::Linear { pct, .. } => *pct == 0.0,
+        }
+    }
+
     pub fn resolve(&self, basis: f32) -> f32 {
         match self {
             // `auto` for width means "fill"; callers decide per property.
@@ -66,7 +77,10 @@ pub enum Display {
 
 impl Display {
     pub fn is_inline(&self) -> bool {
-        matches!(self, Display::Inline | Display::InlineBlock | Display::InlineFlex)
+        matches!(
+            self,
+            Display::Inline | Display::InlineBlock | Display::InlineFlex
+        )
     }
     pub fn is_flex(&self) -> bool {
         matches!(self, Display::Flex | Display::InlineFlex)
@@ -116,7 +130,10 @@ pub enum WhiteSpace {
 
 impl WhiteSpace {
     pub fn preserves(&self) -> bool {
-        matches!(self, WhiteSpace::Pre | WhiteSpace::PreWrap | WhiteSpace::BreakSpaces)
+        matches!(
+            self,
+            WhiteSpace::Pre | WhiteSpace::PreWrap | WhiteSpace::BreakSpaces
+        )
     }
     pub fn wraps(&self) -> bool {
         matches!(

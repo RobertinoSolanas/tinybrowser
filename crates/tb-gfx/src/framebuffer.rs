@@ -140,7 +140,11 @@ impl Framebuffer {
             if w == 0 {
                 continue;
             }
-            let band = if y_off == 0 { y0..(y0 + w) } else { (y1 - w)..y1 };
+            let band = if y_off == 0 {
+                y0..(y0 + w)
+            } else {
+                (y1 - w)..y1
+            };
             for y in band {
                 for x in x0..x1 {
                     if dash.paints(x - x0, y - y0, phase) {
@@ -154,7 +158,11 @@ impl Framebuffer {
             if w == 0 {
                 continue;
             }
-            let band = if x_off == 0 { x0..(x0 + w) } else { (x1 - w)..x1 };
+            let band = if x_off == 0 {
+                x0..(x0 + w)
+            } else {
+                (x1 - w)..x1
+            };
             for x in band {
                 for y in (y0 + t)..(y1 - b) {
                     if dash.paints(x - x0, y - y0, phase) {
@@ -249,9 +257,7 @@ impl Framebuffer {
     pub fn ink_rows(&self, bg: Color) -> Vec<usize> {
         let mut rows = Vec::new();
         for y in 0..self.height {
-            let n = (0..self.width)
-                .filter(|x| self.get(*x, y) != bg)
-                .count();
+            let n = (0..self.width).filter(|x| self.get(*x, y) != bg).count();
             if n > 0 {
                 rows.push(n);
             }
@@ -322,7 +328,10 @@ mod tests {
         let mut fb = Framebuffer::new(2, 2);
         fb.blend_at(-5, 100, Color::RED);
         fb.fill_rect(
-            Rect::from_points(tb_core::Point::new(-10.0, -10.0), tb_core::Point::new(1000.0, 1000.0)),
+            Rect::from_points(
+                tb_core::Point::new(-10.0, -10.0),
+                tb_core::Point::new(1000.0, 1000.0),
+            ),
             Color::RED,
         );
         assert_eq!(fb.get(0, 0), Color::RED);
@@ -332,9 +341,15 @@ mod tests {
     fn clipping_trims_the_paint() {
         let mut fb = Framebuffer::new(10, 10);
         fb.clear(Color::WHITE);
-        let clip = Rect::from_points(tb_core::Point::new(0.0, 0.0), tb_core::Point::new(5.0, 10.0));
+        let clip = Rect::from_points(
+            tb_core::Point::new(0.0, 0.0),
+            tb_core::Point::new(5.0, 10.0),
+        );
         fb.fill_rect_clip(
-            Rect::from_points(tb_core::Point::new(0.0, 0.0), tb_core::Point::new(10.0, 10.0)),
+            Rect::from_points(
+                tb_core::Point::new(0.0, 0.0),
+                tb_core::Point::new(10.0, 10.0),
+            ),
             Some(clip),
             Color::BLACK,
         );
@@ -348,7 +363,10 @@ mod tests {
     fn stroke_draws_four_sides() {
         let mut fb = Framebuffer::new(12, 12);
         fb.clear(Color::WHITE);
-        let r = Rect::from_points(tb_core::Point::new(2.0, 2.0), tb_core::Point::new(10.0, 8.0));
+        let r = Rect::from_points(
+            tb_core::Point::new(2.0, 2.0),
+            tb_core::Point::new(10.0, 8.0),
+        );
         fb.stroke_rect(r, [1.0; 4], [Color::BLACK; 4], Dash::Solid, None);
         assert_eq!(fb.get(2, 2), Color::BLACK, "corner");
         assert_eq!(fb.get(6, 2), Color::BLACK, "top");
@@ -360,10 +378,17 @@ mod tests {
 
     #[test]
     fn dashed_and_dotted_have_gaps() {
-        for (dash, expect_gaps) in [(Dash::Solid, false), (Dash::Dashed, true), (Dash::Dotted, true)] {
+        for (dash, expect_gaps) in [
+            (Dash::Solid, false),
+            (Dash::Dashed, true),
+            (Dash::Dotted, true),
+        ] {
             let mut fb = Framebuffer::new(24, 3);
             fb.clear(Color::WHITE);
-            let r = Rect::from_points(tb_core::Point::new(0.0, 0.0), tb_core::Point::new(24.0, 1.0));
+            let r = Rect::from_points(
+                tb_core::Point::new(0.0, 0.0),
+                tb_core::Point::new(24.0, 1.0),
+            );
             fb.stroke_rect(r, [1.0, 0.0, 0.0, 0.0], [Color::BLACK; 4], dash, None);
             let inks = (0..24).filter(|x| fb.get(*x, 0) == Color::BLACK).count();
             assert!(inks > 0, "{dash:?} painted nothing");
@@ -375,7 +400,10 @@ mod tests {
     fn rounded_rect_covers_center_and_corners_less() {
         let mut fb = Framebuffer::new(20, 20);
         fb.clear(Color::WHITE);
-        let r = Rect::from_points(tb_core::Point::new(2.0, 2.0), tb_core::Point::new(18.0, 18.0));
+        let r = Rect::from_points(
+            tb_core::Point::new(2.0, 2.0),
+            tb_core::Point::new(18.0, 18.0),
+        );
         fb.fill_round_rect(r, 6.0, Color::BLACK, None);
         assert_eq!(fb.get(10, 10), Color::BLACK);
         assert_eq!(fb.get(2, 2), Color::WHITE, "corner is cut");

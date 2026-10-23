@@ -7,12 +7,12 @@
 use crate::cache::HttpCache;
 use crate::charset;
 use crate::cookies::CookieJar;
-use crate::http::{parse_response, HeaderMap, Request, Response, ContentType};
+use crate::http::{parse_response, ContentType, HeaderMap, Request, Response};
 use crate::transport;
 use crate::url::Url;
 use std::sync::Mutex;
 use std::time::Duration;
-use tb_core::{EngineConfig, Phase, Problems, TbError, Result, USER_AGENT};
+use tb_core::{EngineConfig, Phase, Problems, Result, TbError, USER_AGENT};
 
 /// Result of a `fetch` including the metadata the browser layer needs.
 #[derive(Debug, Clone)]
@@ -106,9 +106,7 @@ impl HttpClient {
         }
         // otherwise: a search phrase — we use the projects default search page
         let q = crate::url::form_urlencode(s);
-        Url::parse(&format!(
-            "https://duckduckgo.com/html/?q={q}"
-        ))
+        Url::parse(&format!("https://duckduckgo.com/html/?q={q}"))
     }
 
     /// GET a URL following redirects. Non-2xx statuses are returned as `Err`
@@ -133,7 +131,11 @@ impl HttpClient {
 
     /// GET; returns any status (error only for transport failures).
     pub fn send(&self, url: &Url, referer: Option<&Url>) -> Result<FetchResult> {
-        self.send_with_accept(url, referer, "text/html,application/xhtml+xml;q=0.9,*/*;q=0.5")
+        self.send_with_accept(
+            url,
+            referer,
+            "text/html,application/xhtml+xml;q=0.9,*/*;q=0.5",
+        )
     }
 
     /// GET with an explicit `Accept` header.
@@ -151,8 +153,9 @@ impl HttpClient {
             if let Ok(res) = &mut result {
                 if res.response.is_redirect() {
                     if let Some(loc) = res.response.headers.get("location") {
-                        let next = Url::join(&current, loc)
-                            .map_err(|_| TbError::Network(format!("bad redirect target {loc:?}")))?;
+                        let next = Url::join(&current, loc).map_err(|_| {
+                            TbError::Network(format!("bad redirect target {loc:?}"))
+                        })?;
                         current = next;
                         continue;
                     }
@@ -188,10 +191,7 @@ impl HttpClient {
             let headers = entry.headers.clone();
             let body = entry.body.clone();
             let status = entry.status;
-            let ct = headers
-                .get("content-type")
-                .unwrap_or("")
-                .to_string();
+            let ct = headers.get("content-type").unwrap_or("").to_string();
             let (text, charset) = decode_if_text(status, &ct, &body);
             return Ok(FetchResult {
                 response: Response {
@@ -211,10 +211,12 @@ impl HttpClient {
         let mut req = Request::get(url.clone());
         req.headers.insert("accept", accept);
         req.headers.insert("accept-language", "de,en;q=0.8");
-        req.headers.insert("user-agent", self.config.user_agent.as_str());
+        req.headers
+            .insert("user-agent", self.config.user_agent.as_str());
         // We can decode gzip/deflate ourselves, but `identity` keeps the pipe
         // simple and taz.de answers it with a plain body.
-        req.headers.insert("accept-encoding", "identity;q=1, gzip;q=0.9, deflate;q=0.5");
+        req.headers
+            .insert("accept-encoding", "identity;q=1, gzip;q=0.9, deflate;q=0.5");
         req.headers.insert("connection", "close");
         req.headers.insert("upgrade-insecure-requests", "1");
         if self.config.send_referer {
@@ -238,14 +240,25 @@ impl HttpClient {
         }
 
         let timeout = Duration::from_millis(self.config.timeout_ms);
-        let raw = transport::request_and_read(url, &req.to_bytes(), timeout, self.config.max_resource_bytes)?;
+        let raw = transport::request_and_read(
+            url,
+            &req.to_bytes(),
+            timeout,
+            self.config.max_resource_bytes,
+        )?;
         let mut response = parse_response(&raw)?.ok_or_else(|| {
-            TbError::Network(format!("connection closed before the response was complete: {key}"))
+            TbError::Network(format!(
+                "connection closed before the response was complete: {key}"
+            ))
         })?;
         response.url = key.clone();
 
         // Content-Encoding
-        if let Some(enc) = response.headers.get("content-encoding").map(|s| s.to_string()) {
+        if let Some(enc) = response
+            .headers
+            .get("content-encoding")
+            .map(|s| s.to_string())
+        {
             if !enc.eq_ignore_ascii_case("identity") {
                 response.body = tb_core::content_decode(&response.body, &enc).map_err(|e| {
                     problems.warn_ctx(Phase::Network, e.to_string(), enc.clone());
@@ -256,15 +269,12 @@ impl HttpClient {
         }
 
         if self.config.cookies {
-            self.cookie_jar().store_from_response(&response.headers, url);
+            self.cookie_jar()
+                .store_from_response(&response.headers, url);
             if response.status == 304 {
                 if let Some(entry) = self.cache().get_stale(&key).cloned() {
                     self.cache().revalidate(&key, &response, now);
-                    let ct = entry
-                        .headers
-                        .get("content-type")
-                        .unwrap_or("")
-                        .to_string();
+                    let ct = entry.headers.get("content-type").unwrap_or("").to_string();
                     let (text, charset) = decode_if_text(entry.status, &ct, &entry.body);
                     return Ok(FetchResult {
                         response: Response {
@@ -284,7 +294,11 @@ impl HttpClient {
             self.cache().put(&key, &response, now);
         }
 
-        let ct = response.headers.get("content-type").unwrap_or("").to_string();
+        let ct = response
+            .headers
+            .get("content-type")
+            .unwrap_or("")
+            .to_string();
         let (text, cs) = decode_if_text(response.status, &ct, &response.body);
         Ok(FetchResult {
             response,
@@ -310,10 +324,8 @@ impl HttpClient {
         let mut headers = HeaderMap::new();
         headers.insert("content-type", mime);
         headers.insert("content-length", body.len().to_string());
-        let charset = charset::Charset::from_label(
-            mime.split("charset=").nth(1).unwrap_or(""),
-        )
-        .map(|c| c.label().to_string());
+        let charset = charset::Charset::from_label(mime.split("charset=").nth(1).unwrap_or(""))
+            .map(|c| c.label().to_string());
         let response = Response {
             status: 200,
             reason: "OK".into(),
@@ -321,11 +333,12 @@ impl HttpClient {
             body,
             url: url.to_string(),
         };
-        let text = if mime.starts_with("text/") || mime.contains("javascript") || mime.contains("json") {
-            Some(String::from_utf8_lossy(&response.body).into_owned())
-        } else {
-            None
-        };
+        let text =
+            if mime.starts_with("text/") || mime.contains("javascript") || mime.contains("json") {
+                Some(String::from_utf8_lossy(&response.body).into_owned())
+            } else {
+                None
+            };
         Ok(FetchResult {
             response,
             text,
@@ -334,11 +347,14 @@ impl HttpClient {
             from_cache: false,
         })
     }
-
 }
 
 /// Decode the body when the media type suggests text.
-fn decode_if_text(_status: u16, content_type: &str, body: &[u8]) -> (Option<String>, Option<String>) {
+fn decode_if_text(
+    _status: u16,
+    content_type: &str,
+    body: &[u8],
+) -> (Option<String>, Option<String>) {
     let ct = ContentType::parse(content_type);
     if ct.is_text() || content_type.is_empty() {
         let (text, used) = charset::decode_document(body, ct.charset.as_deref());
@@ -430,7 +446,9 @@ mod tests {
         );
         let base = Url::parse("https://taz.de/a/b.html").unwrap();
         assert_eq!(
-            HttpClient::resolve_url("/c", Some(&base)).unwrap().to_string(),
+            HttpClient::resolve_url("/c", Some(&base))
+                .unwrap()
+                .to_string(),
             "https://taz.de/c"
         );
         assert_eq!(
@@ -456,7 +474,14 @@ mod tests {
 
     #[test]
     fn base64_roundtrip() {
-        for s in ["", "a", "ab", "abc", "abcd", "sehr langer text mit unicode ünïcode"] {
+        for s in [
+            "",
+            "a",
+            "ab",
+            "abc",
+            "abcd",
+            "sehr langer text mit unicode ünïcode",
+        ] {
             let e = base64_encode(s.as_bytes());
             assert_eq!(base64_decode(&e).unwrap(), s.as_bytes(), "{s}");
         }

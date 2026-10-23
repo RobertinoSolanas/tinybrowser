@@ -110,7 +110,8 @@ pub fn decode(data: &[u8]) -> Result<PngImage, String> {
     let mut comment = None;
     let mut idat: Vec<u8> = Vec::new();
     while pos + 8 <= data.len() {
-        let len = u32::from_be_bytes([data[pos], data[pos + 1], data[pos + 2], data[pos + 3]]) as usize;
+        let len =
+            u32::from_be_bytes([data[pos], data[pos + 1], data[pos + 2], data[pos + 3]]) as usize;
         let kind = &data[pos + 4..pos + 8];
         let body_start = pos + 8;
         let body_end = body_start + len;
@@ -128,7 +129,10 @@ pub fn decode(data: &[u8]) -> Result<PngImage, String> {
         buf.extend_from_slice(kind);
         buf.extend_from_slice(body);
         if crc32(&buf) != want_crc {
-            return Err(format!("CRC mismatch in chunk {}", String::from_utf8_lossy(kind)));
+            return Err(format!(
+                "CRC mismatch in chunk {}",
+                String::from_utf8_lossy(kind)
+            ));
         }
         match kind {
             b"IHDR" => {
@@ -181,12 +185,7 @@ pub fn decode(data: &[u8]) -> Result<PngImage, String> {
         let row = &raw[y * (stride + 1) + 1..y * (stride + 1) + 1 + stride];
         for x in 0..width as usize {
             let (r, g, b, a) = if bytes_per_pixel == 4 {
-                (
-                    row[x * 4],
-                    row[x * 4 + 1],
-                    row[x * 4 + 2],
-                    row[x * 4 + 3],
-                )
+                (row[x * 4], row[x * 4 + 1], row[x * 4 + 2], row[x * 4 + 3])
             } else {
                 (row[x * 3], row[x * 3 + 1], row[x * 3 + 2], 255)
             };
@@ -210,8 +209,11 @@ pub fn write_file(path: &std::path::Path, fb: &Framebuffer) -> tb_core::Result<(
             std::fs::create_dir_all(dir)?;
         }
     }
-    std::fs::write(path, encode_with_comment(fb, "tinybrowser — hand written PNG encoder"))
-        .map_err(|e| tb_core::TbError::Io(format!("cannot write {}: {e}", path.display())))
+    std::fs::write(
+        path,
+        encode_with_comment(fb, "tinybrowser — hand written PNG encoder"),
+    )
+    .map_err(|e| tb_core::TbError::Io(format!("cannot write {}: {e}", path.display())))
 }
 
 #[cfg(test)]
@@ -288,7 +290,10 @@ mod tests {
         let mut fb = Framebuffer::new(320, 240);
         fb.clear(Color::rgb(10, 20, 30));
         for i in 0..40 {
-            fb.fill_rect(Rect::new(i as f32 * 4.0, i as f32 * 3.0, 20.0, 10.0), Color::GREEN);
+            fb.fill_rect(
+                Rect::new(i as f32 * 4.0, i as f32 * 3.0, 20.0, 10.0),
+                Color::GREEN,
+            );
         }
         let bytes = encode(&fb);
         let img = decode(&bytes).unwrap();

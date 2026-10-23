@@ -378,13 +378,12 @@ fn parse_attr(inner: &str) -> Option<Simple> {
             let rest: String = chars[from..].iter().collect();
             let rest = rest.trim();
             // trailing `i` flag (case insensitive match), always after a space
-            let (raw, insensitive) = if rest.len() > 2
-                && (rest.ends_with(" i") || rest.ends_with(" I"))
-            {
-                (rest[..rest.len() - 2].trim(), true)
-            } else {
-                (rest, false)
-            };
+            let (raw, insensitive) =
+                if rest.len() > 2 && (rest.ends_with(" i") || rest.ends_with(" I")) {
+                    (rest[..rest.len() - 2].trim(), true)
+                } else {
+                    (rest, false)
+                };
             let value = raw.trim_matches('"').trim_matches('\'').to_string();
             let op = match op_ch {
                 '=' => AttrOp::Equals,
@@ -469,7 +468,9 @@ mod tests {
     fn attribute_selectors() {
         match sel("a[href^='https://']").parts.as_slice() {
             [SelectorPart::Compound(v)] => match &v[1] {
-                Simple::Attr { name, op, value, .. } => {
+                Simple::Attr {
+                    name, op, value, ..
+                } => {
                     assert_eq!(name, "href");
                     assert_eq!(*op, AttrOp::Caret);
                     assert_eq!(value, "https://");

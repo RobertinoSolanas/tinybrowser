@@ -31,10 +31,50 @@ enum Mode {
 
 /// Elements that end an open `<p>`.
 const CLOSES_P: &[&str] = &[
-    "address", "article", "aside", "blockquote", "details", "div", "dl", "fieldset", "figcaption",
-    "figure", "footer", "form", "h1", "h2", "h3", "h4", "h5", "h6", "header", "hgroup", "hr",
-    "main", "menu", "nav", "ol", "p", "pre", "search", "section", "table", "ul", "form", "center",
-    "marquee", "legend", "caption", "colgroup", "tbody", "tfoot", "thead", "tr", "li", "dd", "dt",
+    "address",
+    "article",
+    "aside",
+    "blockquote",
+    "details",
+    "div",
+    "dl",
+    "fieldset",
+    "figcaption",
+    "figure",
+    "footer",
+    "form",
+    "h1",
+    "h2",
+    "h3",
+    "h4",
+    "h5",
+    "h6",
+    "header",
+    "hgroup",
+    "hr",
+    "main",
+    "menu",
+    "nav",
+    "ol",
+    "p",
+    "pre",
+    "search",
+    "section",
+    "table",
+    "ul",
+    "form",
+    "center",
+    "marquee",
+    "legend",
+    "caption",
+    "colgroup",
+    "tbody",
+    "tfoot",
+    "thead",
+    "tr",
+    "li",
+    "dd",
+    "dt",
 ];
 
 /// Head level elements.
@@ -45,11 +85,62 @@ const HEAD_ELEMENTS: &[&str] = &[
 
 /// Elements that break out of foreign (`svg`/`math`) content.
 const FOREIGN_BREAK: &[&str] = &[
-    "b", "big", "blockquote", "body", "br", "center", "code", "dd", "div", "dl", "dt", "em",
-    "embed", "h1", "h2", "h3", "h4", "h5", "h6", "head", "hr", "i", "img", "li", "listing", "menu",
-    "meta", "nobr", "ol", "p", "pre", "ruby", "s", "small", "span", "strong", "strike", "sub",
-    "sup", "table", "tt", "u", "ul", "var", "html", "body", "section", "article", "aside",
-    "header", "footer", "nav", "main", "form", "figure", "figcaption",
+    "b",
+    "big",
+    "blockquote",
+    "body",
+    "br",
+    "center",
+    "code",
+    "dd",
+    "div",
+    "dl",
+    "dt",
+    "em",
+    "embed",
+    "h1",
+    "h2",
+    "h3",
+    "h4",
+    "h5",
+    "h6",
+    "head",
+    "hr",
+    "i",
+    "img",
+    "li",
+    "listing",
+    "menu",
+    "meta",
+    "nobr",
+    "ol",
+    "p",
+    "pre",
+    "ruby",
+    "s",
+    "small",
+    "span",
+    "strong",
+    "strike",
+    "sub",
+    "sup",
+    "table",
+    "tt",
+    "u",
+    "ul",
+    "var",
+    "html",
+    "body",
+    "section",
+    "article",
+    "aside",
+    "header",
+    "footer",
+    "nav",
+    "main",
+    "form",
+    "figure",
+    "figcaption",
 ];
 
 /// Elements that are never pushed onto the stack of open elements.
@@ -179,7 +270,10 @@ impl TreeBuilder {
 
     /// Generate implied end tags (`p`, `li`, `dd`, `dt`, `tbody`, ...).
     fn generate_implied_end_tags(&mut self) {
-        const IMPLIED: &[&str] = &["p", "dd", "dt", "li", "option", "optgroup", "tbody", "td", "tfoot", "th", "thead", "tr"];
+        const IMPLIED: &[&str] = &[
+            "p", "dd", "dt", "li", "option", "optgroup", "tbody", "td", "tfoot", "th", "thead",
+            "tr",
+        ];
         loop {
             let Some(top) = self.stack.last().copied() else {
                 break;
@@ -413,7 +507,10 @@ impl TreeBuilder {
                     let el = self.insert_element(name, attrs, Namespace::Html);
                     if is_void(name) || self_closing {
                         // `<meta ... />` and void head elements are not pushed
-                        if name == "title" || name == "style" || name == "script" || name == "noscript"
+                        if name == "title"
+                            || name == "style"
+                            || name == "script"
+                            || name == "noscript"
                         {
                             self.push(el);
                             self.start_raw_text(name);
@@ -452,32 +549,30 @@ impl TreeBuilder {
                     }
                 }
             }
-            Mode::AfterHead => {
-                match name {
-                    "body" => {
-                        self.ensure_body();
-                        for (n, v) in attrs {
-                            if let Some(b) = self.body {
-                                self.dom.set_attr(b, n, v.clone());
-                            }
+            Mode::AfterHead => match name {
+                "body" => {
+                    self.ensure_body();
+                    for (n, v) in attrs {
+                        if let Some(b) = self.body {
+                            self.dom.set_attr(b, n, v.clone());
                         }
-                        self.mode = Mode::InBody;
                     }
-                    "frameset" => {
-                        self.ensure_body();
-                        let el = self.insert_element(name, attrs, Namespace::Html);
-                        self.push(el);
-                        self.mode = Mode::InBody;
-                    }
-                    "html" => self.merge_attrs_into_root(attrs),
-                    "head" => {}
-                    _ => {
-                        self.mode = Mode::InBody;
-                        self.ensure_body();
-                        self.do_start_tag(name, attrs, self_closing);
-                    }
+                    self.mode = Mode::InBody;
                 }
-            }
+                "frameset" => {
+                    self.ensure_body();
+                    let el = self.insert_element(name, attrs, Namespace::Html);
+                    self.push(el);
+                    self.mode = Mode::InBody;
+                }
+                "html" => self.merge_attrs_into_root(attrs),
+                "head" => {}
+                _ => {
+                    self.mode = Mode::InBody;
+                    self.ensure_body();
+                    self.do_start_tag(name, attrs, self_closing);
+                }
+            },
             Mode::Text => {
                 // A start tag inside raw text (e.g. unclosed <script>) just
                 // becomes text; the tokenizer already treated it as raw.

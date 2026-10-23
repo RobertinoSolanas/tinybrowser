@@ -93,10 +93,14 @@ impl MediaQuery {
             })
         };
         match c.name.as_str() {
-            "width" => px(&c.value).map(|w| (vp.width - w).abs() < 0.5).unwrap_or(true),
+            "width" => px(&c.value)
+                .map(|w| (vp.width - w).abs() < 0.5)
+                .unwrap_or(true),
             "min-width" => px(&c.value).map(|w| vp.width >= w).unwrap_or(true),
             "max-width" => px(&c.value).map(|w| vp.width <= w).unwrap_or(true),
-            "height" => px(&c.value).map(|h| (vp.height - h).abs() < 0.5).unwrap_or(true),
+            "height" => px(&c.value)
+                .map(|h| (vp.height - h).abs() < 0.5)
+                .unwrap_or(true),
             "min-height" => px(&c.value).map(|h| vp.height >= h).unwrap_or(true),
             "max-height" => px(&c.value).map(|h| vp.height <= h).unwrap_or(true),
             "device-width" | "device-height" => true,
@@ -117,7 +121,11 @@ impl MediaQuery {
                 }
             }
             "prefers-reduced-motion" => {
-                let want = c.value.as_ref().and_then(|v| v.as_str()).unwrap_or("no-preference");
+                let want = c
+                    .value
+                    .as_ref()
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("no-preference");
                 (want == "reduce") == vp.reduced_motion
             }
             "prefers-contrast" => true,
@@ -325,6 +333,9 @@ mod tests {
         let q = &parse_media_list("not all")[0];
         assert!(!q.matches(&vp(800.0, 600.0)));
         let u = &parse_media_list("(some-unknown-feature: 4)")[0];
-        assert!(u.matches(&vp(800.0, 600.0)), "unknown features are permissive");
+        assert!(
+            u.matches(&vp(800.0, 600.0)),
+            "unknown features are permissive"
+        );
     }
 }

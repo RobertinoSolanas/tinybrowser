@@ -125,7 +125,8 @@ impl StyleSheet {
             for r in rules {
                 match r {
                     Rule::Style(s) => {
-                        let sels: Vec<String> = s.selectors.iter().map(|c| c.text.clone()).collect();
+                        let sels: Vec<String> =
+                            s.selectors.iter().map(|c| c.text.clone()).collect();
                         out.push_str(&format!("{pad}{} {{}}\n", sels.join(", ")));
                         for d in &s.declarations {
                             out.push_str(&format!("{pad}  {}\n", d.to_css()));

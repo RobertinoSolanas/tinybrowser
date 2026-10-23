@@ -380,6 +380,10 @@ mod tests {
     fn numeric_without_semicolon_and_invalid() {
         assert_eq!(decode("&#72;i", false), "Hi");
         assert_eq!(decode("&#0;", false), "\u{fffd}");
-        assert_eq!(decode("&#xD800;", false), "\u{fffd}", "surrogate -> replacement");
+        assert_eq!(
+            decode("&#xD800;", false),
+            "\u{fffd}",
+            "surrogate -> replacement"
+        );
     }
 }

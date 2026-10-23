@@ -126,7 +126,11 @@ impl Resolved {
                 CalcTerm::Length(n, u, mul) => self.length(*n, *u) * mul,
                 CalcTerm::Number(n) => *n,
                 CalcTerm::Calc(inner, mul) => self.calc(inner, lookup)? * mul,
-                CalcTerm::Var { name, fallback, mul } => {
+                CalcTerm::Var {
+                    name,
+                    fallback,
+                    mul,
+                } => {
                     let raw = lookup(name).or_else(|| fallback.as_ref().map(|f| f.to_css()))?;
                     let parsed = crate::value::parse_value(&raw);
                     let first = parsed.parts.first()?;
@@ -206,10 +210,7 @@ mod tests {
     #[test]
     fn var_with_fallback() {
         let c = ctx();
-        assert_eq!(
-            c.resolve_length(&val("var(--gap)"), &lookup),
-            Some(8.0)
-        );
+        assert_eq!(c.resolve_length(&val("var(--gap)"), &lookup), Some(8.0));
         assert_eq!(
             c.resolve_length(&val("var(--missing, 7px)"), &lookup),
             Some(7.0)

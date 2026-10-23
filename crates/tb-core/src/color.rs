@@ -203,7 +203,11 @@ fn parse_hex(hex: &str) -> Option<Color> {
         }
         6 => {
             let v = u32::from_str_radix(hex, 16).ok()?;
-            Some(Color::rgb(((v >> 16) & 0xff) as u8, ((v >> 8) & 0xff) as u8, (v & 0xff) as u8))
+            Some(Color::rgb(
+                ((v >> 16) & 0xff) as u8,
+                ((v >> 8) & 0xff) as u8,
+                (v & 0xff) as u8,
+            ))
         }
         8 => {
             let v = u32::from_str_radix(hex, 16).ok()?;
@@ -236,7 +240,9 @@ fn parse_alpha(p: &str) -> Option<u8> {
     if let Some(pct) = p.strip_suffix('%') {
         return Some((pct.trim().parse::<f32>().ok()? * 255.0 / 100.0) as u8);
     }
-    p.parse::<f32>().ok().map(|v| (v.clamp(0.0, 1.0) * 255.0).round() as u8)
+    p.parse::<f32>()
+        .ok()
+        .map(|v| (v.clamp(0.0, 1.0) * 255.0).round() as u8)
 }
 
 fn parse_rgb_fn(inner: &str) -> Option<Color> {
@@ -482,21 +488,36 @@ mod tests {
     #[test]
     fn parses_rgb_and_hsl() {
         assert_eq!(Color::parse("rgb(1,2,3)"), Some(Color::rgb(1, 2, 3)));
-        assert_eq!(Color::parse("rgb(0% 50% 100%)"), Some(Color::rgb(0, 128, 255)));
+        assert_eq!(
+            Color::parse("rgb(0% 50% 100%)"),
+            Some(Color::rgb(0, 128, 255))
+        );
         assert_eq!(
             Color::parse("rgba(255, 0, 0, 0.5)"),
             Some(Color::rgba(255, 0, 0, 128))
         );
-        assert_eq!(Color::parse("hsl(0, 100%, 50%)"), Some(Color::rgb(255, 0, 0)));
-        assert_eq!(Color::parse("hsl(120,100%,50%)"), Some(Color::rgb(0, 255, 0)));
-        assert_eq!(Color::parse("hsl(240 100% 50%)"), Some(Color::rgb(0, 0, 255)));
+        assert_eq!(
+            Color::parse("hsl(0, 100%, 50%)"),
+            Some(Color::rgb(255, 0, 0))
+        );
+        assert_eq!(
+            Color::parse("hsl(120,100%,50%)"),
+            Some(Color::rgb(0, 255, 0))
+        );
+        assert_eq!(
+            Color::parse("hsl(240 100% 50%)"),
+            Some(Color::rgb(0, 0, 255))
+        );
     }
 
     #[test]
     fn named_colors_and_transparency() {
         assert_eq!(Color::parse("tomato"), Some(Color::rgb(255, 99, 71)));
         assert_eq!(Color::parse("transparent"), Some(Color::TRANSPARENT));
-        assert_eq!(Color::parse("rebeccapurple"), Some(Color::rgb(102, 51, 153)));
+        assert_eq!(
+            Color::parse("rebeccapurple"),
+            Some(Color::rgb(102, 51, 153))
+        );
         assert_eq!(Color::parse("notacolor"), None);
     }
 

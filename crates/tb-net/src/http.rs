@@ -1,8 +1,8 @@
 //! HTTP/1.1 messages, written from scratch: header table, chunked transfer
 //! decoding, response framing and status helpers.
 
-use tb_core::TbError;
 use tb_core::Result;
+use tb_core::TbError;
 
 /// Case-insensitive header multimap (insertion ordered).
 #[derive(Clone, Debug, Default, PartialEq)]
@@ -27,8 +27,7 @@ impl HeaderMap {
     }
 
     pub fn append(&mut self, name: &str, value: impl Into<String>) {
-        self.entries
-            .push((name.to_ascii_lowercase(), value.into()));
+        self.entries.push((name.to_ascii_lowercase(), value.into()));
     }
 
     pub fn get(&self, name: &str) -> Option<&str> {
@@ -289,9 +288,8 @@ impl std::fmt::Display for ContentType {
 ///
 /// Returns `Ok(None)` when more bytes are needed.
 pub fn parse_response(raw: &[u8]) -> Result<Option<Response>> {
-    let sep = find_double_newline(raw).ok_or_else(|| {
-        TbError::Network("malformed HTTP response: no header terminator".into())
-    })?;
+    let sep = find_double_newline(raw)
+        .ok_or_else(|| TbError::Network("malformed HTTP response: no header terminator".into()))?;
     let head = String::from_utf8_lossy(&raw[..sep]).replace("\r\n", "\n");
     let mut lines = head.split('\n');
     let status_line = lines
@@ -349,7 +347,10 @@ fn decode_body(status: u16, headers: &HeaderMap, rest: &[u8]) -> Result<Option<V
     if chunked {
         return decode_chunked(rest);
     }
-    if let Some(cl) = headers.get("content-length").and_then(|v| v.trim().parse::<usize>().ok()) {
+    if let Some(cl) = headers
+        .get("content-length")
+        .and_then(|v| v.trim().parse::<usize>().ok())
+    {
         if rest.len() < cl {
             return Ok(None);
         }
@@ -366,7 +367,9 @@ pub fn decode_chunked(mut input: &[u8]) -> Result<Option<Vec<u8>>> {
         let Some(nl) = find_line_end(input) else {
             return Ok(None);
         };
-        let line = String::from_utf8_lossy(&input[..nl]).trim().to_ascii_lowercase();
+        let line = String::from_utf8_lossy(&input[..nl])
+            .trim()
+            .to_ascii_lowercase();
         let size_str = line.split(';').next().unwrap_or("").trim();
         let size = usize::from_str_radix(size_str, 16)
             .map_err(|_| TbError::Network(format!("bad chunk size: {size_str:?}")))?;

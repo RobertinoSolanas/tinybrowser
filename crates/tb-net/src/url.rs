@@ -5,9 +5,9 @@
 //! (`//cdn.example/x.js`), query only (`?page=2`), fragment only (`#top`),
 //! backslashes used as separators on the wire, and `data:` URLs.
 
-use tb_core::TbError;
-use tb_core::Result;
 use std::fmt;
+use tb_core::Result;
+use tb_core::TbError;
 
 /// Percent-decode a byte string (UTF-8 lossy at the end).
 pub fn percent_decode(s: &str) -> String {
@@ -48,8 +48,26 @@ pub fn percent_encode(s: &str) -> String {
     let mut out = String::with_capacity(s.len());
     for b in s.as_bytes() {
         match b {
-            b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'-' | b'_' | b'.' | b'~' | b'/' | b'!'
-            | b'$' | b'&' | b'\'' | b'(' | b')' | b'*' | b'+' | b',' | b';' | b'=' | b':'
+            b'A'..=b'Z'
+            | b'a'..=b'z'
+            | b'0'..=b'9'
+            | b'-'
+            | b'_'
+            | b'.'
+            | b'~'
+            | b'/'
+            | b'!'
+            | b'$'
+            | b'&'
+            | b'\''
+            | b'('
+            | b')'
+            | b'*'
+            | b'+'
+            | b','
+            | b';'
+            | b'='
+            | b':'
             | b'@' => out.push(*b as char),
             _ => out.push_str(&format!("%{b:02X}")),
         }
@@ -160,10 +178,7 @@ impl Url {
         };
         let (username, password) = match userinfo {
             Some(ui) => match ui.find(':') {
-                Some(i) => (
-                    percent_decode(&ui[..i]),
-                    Some(percent_decode(&ui[i + 1..])),
-                ),
+                Some(i) => (percent_decode(&ui[..i]), Some(percent_decode(&ui[i + 1..]))),
                 None => (percent_decode(ui), None),
             },
             None => (String::new(), None),
@@ -222,7 +237,8 @@ impl Url {
                     .bytes()
                     .all(|b| b.is_ascii_alphanumeric() || b == b'+' || b == b'-' || b == b'.');
             if scheme_ok {
-                if scheme.eq_ignore_ascii_case("javascript") || scheme.eq_ignore_ascii_case("mailto")
+                if scheme.eq_ignore_ascii_case("javascript")
+                    || scheme.eq_ignore_ascii_case("mailto")
                 {
                     // keep verbatim, they are not fetchable but must round-trip
                     return Ok(Url {
@@ -307,7 +323,9 @@ impl Url {
 
     /// Same-origin check (used for cookie and referrer policy).
     pub fn same_origin(&self, other: &Url) -> bool {
-        self.scheme == other.scheme && self.host == other.host && self.effective_port() == other.effective_port()
+        self.scheme == other.scheme
+            && self.host == other.host
+            && self.effective_port() == other.effective_port()
     }
 
     /// Path + query + fragment.
@@ -382,9 +400,10 @@ fn split_host_port(hostport: &str) -> Result<(String, Option<u16>)> {
         let host = &rest[..i];
         let after = &rest[i + 1..];
         let port = match after.strip_prefix(':') {
-            Some(p) if !p.is_empty() => Some(p.parse::<u16>().map_err(|_| {
-                TbError::Network(format!("bad port: {p}"))
-            })?),
+            Some(p) if !p.is_empty() => Some(
+                p.parse::<u16>()
+                    .map_err(|_| TbError::Network(format!("bad port: {p}")))?,
+            ),
             _ => None,
         };
         return Ok((format!("[{host}]"), port));

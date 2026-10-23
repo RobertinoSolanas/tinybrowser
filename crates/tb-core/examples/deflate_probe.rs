@@ -6,7 +6,9 @@ use std::io::Write;
 fn main() {
     let mut data: Vec<u8> = Vec::new();
     for i in 0..2000 {
-        data.extend_from_slice(format!("line {i}: the quick brown fox jumps over the lazy dog — taz.de\n").as_bytes());
+        data.extend_from_slice(
+            format!("line {i}: the quick brown fox jumps over the lazy dog — taz.de\n").as_bytes(),
+        );
     }
     data.extend((0..=255u8).cycle().take(5000));
     std::fs::write("/tmp/tb_sample.bin", &data).unwrap();

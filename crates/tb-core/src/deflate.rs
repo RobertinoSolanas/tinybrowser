@@ -23,7 +23,11 @@ fn crc32_table() -> &'static [u32; 256] {
         for i in 0..256u32 {
             let mut c = i;
             for _ in 0..8 {
-                c = if c & 1 != 0 { 0xedb8_8320 ^ (c >> 1) } else { c >> 1 };
+                c = if c & 1 != 0 {
+                    0xedb8_8320 ^ (c >> 1)
+                } else {
+                    c >> 1
+                };
             }
             t[i as usize] = c;
         }
@@ -154,8 +158,8 @@ impl Huffman {
 }
 
 const LEN_BASE: [u16; 29] = [
-    3, 4, 5, 6, 7, 8, 9, 10, 11, 13, 15, 17, 19, 23, 27, 31, 35, 43, 51, 59, 67, 83, 99, 115,
-    131, 163, 195, 227, 258,
+    3, 4, 5, 6, 7, 8, 9, 10, 11, 13, 15, 17, 19, 23, 27, 31, 35, 43, 51, 59, 67, 83, 99, 115, 131,
+    163, 195, 227, 258,
 ];
 const LEN_EXTRA: [u32; 29] = [
     0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 2, 2, 2, 2, 3, 3, 3, 3, 4, 4, 4, 4, 5, 5, 5, 5, 0,
@@ -207,9 +211,9 @@ pub fn inflate(input: &[u8]) -> crate::Result<Vec<u8>> {
                     dynamic_tables(&mut br)?
                 };
                 loop {
-                    let sym = litlen.decode(&mut br).ok_or_else(|| {
-                        crate::TbError::Network("corrupt deflate stream".into())
-                    })?;
+                    let sym = litlen
+                        .decode(&mut br)
+                        .ok_or_else(|| crate::TbError::Network("corrupt deflate stream".into()))?;
                     if sym < 256 {
                         out.push(sym as u8);
                     } else if sym == 256 {
@@ -219,11 +223,11 @@ pub fn inflate(input: &[u8]) -> crate::Result<Vec<u8>> {
                         if idx >= LEN_BASE.len() {
                             return Err(crate::TbError::Network("bad length code".into()));
                         }
-                        let len =
-                            LEN_BASE[idx] as usize + infl!(br.bits(LEN_EXTRA[idx])) as usize;
-                        let dsym = dist.decode(&mut br).ok_or_else(|| {
-                            crate::TbError::Network("bad distance code".into())
-                        })? as usize;
+                        let len = LEN_BASE[idx] as usize + infl!(br.bits(LEN_EXTRA[idx])) as usize;
+                        let dsym = dist
+                            .decode(&mut br)
+                            .ok_or_else(|| crate::TbError::Network("bad distance code".into()))?
+                            as usize;
                         if dsym >= DIST_BASE.len() {
                             return Err(crate::TbError::Network("bad distance symbol".into()));
                         }
@@ -465,7 +469,11 @@ fn length_code(len: usize) -> (u16, u32, u32) {
             break;
         }
     }
-    (257 + idx as u16, LEN_EXTRA[idx], (len - LEN_BASE[idx] as usize) as u32)
+    (
+        257 + idx as u16,
+        LEN_EXTRA[idx],
+        (len - LEN_BASE[idx] as usize) as u32,
+    )
 }
 
 fn distance_code(d: usize) -> (u32, u32, u32) {
@@ -477,7 +485,11 @@ fn distance_code(d: usize) -> (u32, u32, u32) {
             break;
         }
     }
-    (idx as u32, DIST_EXTRA[idx], (d - DIST_BASE[idx] as usize) as u32)
+    (
+        idx as u32,
+        DIST_EXTRA[idx],
+        (d - DIST_BASE[idx] as usize) as u32,
+    )
 }
 
 /// DEFLATE-compress `data` (fixed Huffman codes + greedy LZ77 matches).
@@ -584,7 +596,10 @@ mod tests {
     fn crc32_known_vectors() {
         assert_eq!(crc32(b""), 0);
         assert_eq!(crc32(b"123456789"), 0xcbf4_3926);
-        assert_eq!(crc32(b"The quick brown fox jumps over the lazy dog"), 0x414f_a339);
+        assert_eq!(
+            crc32(b"The quick brown fox jumps over the lazy dog"),
+            0x414f_a339
+        );
     }
 
     #[test]
@@ -600,7 +615,9 @@ mod tests {
             b"a".to_vec(),
             b"hello world".to_vec(),
             b"abababababababababab".to_vec(),
-            "sehr langer text mit vielen wiederholungen ".repeat(400).into_bytes(),
+            "sehr langer text mit vielen wiederholungen "
+                .repeat(400)
+                .into_bytes(),
             (0..=255u8).cycle().take(70_000).collect(),
         ];
         for t in texts {

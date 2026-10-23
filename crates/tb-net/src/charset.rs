@@ -3,7 +3,6 @@
 //! Priority order follows the HTML standard: BOM, then `Content-Type`, then a
 //! `<meta charset>` in the first KiB, then UTF-8 with lossy replacement.
 
-
 /// A character encoding tinybrowser can decode.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Charset {
@@ -191,7 +190,10 @@ pub fn decode_document(bytes: &[u8], header_charset: Option<&str>) -> (String, S
         // A server that blindly claims utf-8 while the document declares
         // latin-1 gets rescued (strict utf-8 would produce replacement chars).
         if cs == Charset::Utf8 && std::str::from_utf8(bytes).is_err() {
-            if let Some(meta_cs) = sniff_meta_charset(bytes).as_deref().and_then(Charset::from_label) {
+            if let Some(meta_cs) = sniff_meta_charset(bytes)
+                .as_deref()
+                .and_then(Charset::from_label)
+            {
                 if meta_cs != Charset::Utf8 {
                     return (meta_cs.decode(bytes), meta_cs.label().to_string());
                 }
@@ -232,7 +234,10 @@ mod tests {
     fn decodes_latin1_and_cp1252() {
         assert_eq!(Charset::Latin1.decode(&[0xfc]), "ü");
         // Windows-1252 smart quotes and euro
-        assert_eq!(Charset::Windows1252.decode(&[0x93, 0x41, 0x94]), "\u{201c}A\u{201d}");
+        assert_eq!(
+            Charset::Windows1252.decode(&[0x93, 0x41, 0x94]),
+            "\u{201c}A\u{201d}"
+        );
         assert_eq!(Charset::Windows1252.decode(&[0x80]), "€");
     }
 

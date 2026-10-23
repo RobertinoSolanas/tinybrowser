@@ -5,7 +5,9 @@
 //! Layout asks this module for metrics, so line boxes always match what the
 //! rasterizer will paint — no half-covered glyph rows.
 
-use crate::font_data::{ASCII, ASCII_START, EXTRA, ASCENT_ROWS, DESCENT_ROWS, GLYPH_HEIGHT, GLYPH_WIDTH};
+use crate::font_data::{
+    ASCENT_ROWS, ASCII, ASCII_START, DESCENT_ROWS, EXTRA, GLYPH_HEIGHT, GLYPH_WIDTH,
+};
 use crate::framebuffer::Framebuffer;
 use std::collections::HashMap;
 use tb_core::{Color, Rect};
@@ -291,7 +293,16 @@ mod tests {
         let mut fb = Framebuffer::new(40, 20);
         fb.clear(Color::WHITE);
         let clip = Rect::new(0.0, 0.0, 2.0, 20.0);
-        f.draw(&mut fb, 0.0, 8.0, "WW", 7.0, false, Color::BLACK, Some(clip));
+        f.draw(
+            &mut fb,
+            0.0,
+            8.0,
+            "WW",
+            7.0,
+            false,
+            Color::BLACK,
+            Some(clip),
+        );
         assert_eq!(fb.get(10, 4), Color::WHITE, "text outside the clip is gone");
         // 'W' row 3 starts at x=0, which is still inside the 2px clip
         assert_eq!(fb.get(0, 4), Color::BLACK);

@@ -22,7 +22,7 @@ pub use deflate::{
     zlib_inflate,
 };
 pub use error::{Phase, Result, TbError};
-pub use geometry::{Point, Rect, Size, Sides};
+pub use geometry::{Point, Rect, Sides, Size};
 pub use problems::{Problem, Problems, Severity};
 pub use time::Stopwatch;
 

@@ -194,8 +194,10 @@ name = "tb-layout"
 version = "0.1.0"
 dependencies = [
  "tb-core",
+ "tb-css",
  "tb-dom",
  "tb-gfx",
+ "tb-html",
  "tb-style",
 ]
 

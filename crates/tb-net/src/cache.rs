@@ -81,13 +81,17 @@ impl HttpCache {
             return;
         }
         let max_age = parse_max_age(&cc).unwrap_or_else(|| {
-            if let Some(expires) = resp.headers.get("expires").and_then(|v| {
-                crate::cookies::parse_http_date(v)
-            }) {
+            if let Some(expires) = resp
+                .headers
+                .get("expires")
+                .and_then(|v| crate::cookies::parse_http_date(v))
+            {
                 (expires - now).max(0)
-            } else if let Some(lm) = resp.headers.get("last-modified").and_then(|v| {
-                crate::cookies::parse_http_date(v)
-            }) {
+            } else if let Some(lm) = resp
+                .headers
+                .get("last-modified")
+                .and_then(|v| crate::cookies::parse_http_date(v))
+            {
                 // heuristic: 10% of the time since last modification
                 ((now - lm) / 10).clamp(0, 3600)
             } else {

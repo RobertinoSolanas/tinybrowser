@@ -22,7 +22,10 @@ pub struct NodeId {
 
 impl NodeId {
     /// A handle that never resolves.
-    pub const NONE: NodeId = NodeId { idx: u32::MAX, gen: 0 };
+    pub const NONE: NodeId = NodeId {
+        idx: u32::MAX,
+        gen: 0,
+    };
 
     pub fn is_none(self) -> bool {
         self.idx == u32::MAX
@@ -184,7 +187,10 @@ pub enum NodeKind {
     Element(Element),
     Text(String),
     Comment(String),
-    ProcessingInstruction { target: String, data: String },
+    ProcessingInstruction {
+        target: String,
+        data: String,
+    },
 }
 
 impl NodeKind {
@@ -312,10 +318,7 @@ impl Dom {
             let slot = &mut self.slots[idx as usize];
             slot.node = node;
             slot.alive = true;
-            NodeId {
-                idx,
-                gen: slot.gen,
-            }
+            NodeId { idx, gen: slot.gen }
         } else {
             let idx = self.slots.len() as u32;
             self.slots.push(Slot {
@@ -721,7 +724,9 @@ impl Dom {
     // --------------------------------------------------------- attributes ---
 
     pub fn attr(&self, id: NodeId, name: &str) -> Option<String> {
-        self.element(id).and_then(|e| e.attr(name)).map(|s| s.to_string())
+        self.element(id)
+            .and_then(|e| e.attr(name))
+            .map(|s| s.to_string())
     }
 
     pub fn set_attr(&mut self, id: NodeId, name: &str, value: impl Into<String>) {
@@ -768,7 +773,11 @@ impl Dom {
     pub fn get_elements_by_class(&self, class: &str) -> Vec<NodeId> {
         self.elements()
             .into_iter()
-            .filter(|n| self.element(*n).map(|e| e.has_class(class)).unwrap_or(false))
+            .filter(|n| {
+                self.element(*n)
+                    .map(|e| e.has_class(class))
+                    .unwrap_or(false)
+            })
             .collect()
     }
 
@@ -776,6 +785,14 @@ impl Dom {
 
     /// `textContent`: concatenated text of the whole subtree (DOM semantics:
     /// script and style content included).
+    /// Text of a text node (`None` for any other node type).
+    pub fn text(&self, id: NodeId) -> Option<String> {
+        match self.get(id).map(|n| &n.kind) {
+            Some(NodeKind::Text(t)) => Some(t.clone()),
+            _ => None,
+        }
+    }
+
     pub fn text_content(&self, id: NodeId) -> String {
         let mut out = String::new();
         self.collect_text(id, &mut out, false);
@@ -798,7 +815,12 @@ impl Dom {
                     return;
                 }
                 NodeKind::Element(e) => {
-                    if skip_invisible && matches!(e.tag.as_str(), "script" | "style" | "template" | "head" | "title") {
+                    if skip_invisible
+                        && matches!(
+                            e.tag.as_str(),
+                            "script" | "style" | "template" | "head" | "title"
+                        )
+                    {
                         return;
                     }
                 }
@@ -823,7 +845,11 @@ impl Dom {
     pub fn text_children(&self, id: NodeId) -> Vec<(NodeId, String)> {
         self.children(id)
             .into_iter()
-            .filter_map(|c| self.get(c).and_then(|n| n.text()).map(|t| (c, t.to_string())))
+            .filter_map(|c| {
+                self.get(c)
+                    .and_then(|n| n.text())
+                    .map(|t| (c, t.to_string()))
+            })
             .collect()
     }
 
@@ -949,13 +975,17 @@ impl Dom {
                 Some(NodeKind::Doctype { name, .. }) => {
                     out.push_str(&format!("{pad}<!DOCTYPE {name}>\n"))
                 }
-                Some(NodeKind::Comment(c)) => {
-                    out.push_str(&format!("{pad}<!-- {} -->\n", tb_core::text::truncate(c, 40)))
-                }
+                Some(NodeKind::Comment(c)) => out.push_str(&format!(
+                    "{pad}<!-- {} -->\n",
+                    tb_core::text::truncate(c, 40)
+                )),
                 Some(NodeKind::Text(t)) => {
                     let t = tb_core::text::collapse_whitespace(t);
                     if !t.is_empty() {
-                        out.push_str(&format!("{pad}#text \"{}\"\n", tb_core::text::truncate(&t, 60)));
+                        out.push_str(&format!(
+                            "{pad}#text \"{}\"\n",
+                            tb_core::text::truncate(&t, 60)
+                        ));
                     }
                 }
                 Some(NodeKind::Element(e)) => {

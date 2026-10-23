@@ -95,7 +95,10 @@ pub enum Value {
     Length(f32, Unit),
     Color(Color),
     Str(String),
-    Function { name: String, args: Vec<Value> },
+    Function {
+        name: String,
+        args: Vec<Value>,
+    },
     Calc(CalcExpr),
     /// preserved raw text (unknown at-rule garbage, filters, ...)
     Raw(String),
@@ -185,10 +188,16 @@ impl Value {
                 let inner: Vec<String> = args.iter().map(|a| a.to_css()).collect();
                 format!("{name}({})", inner.join(", "))
             }
-            Value::Calc(c) => format!("calc({})", c.terms.iter().map(|(s, t)| {
-                let sign = if *s < 0.0 { "-" } else { "+" };
-                format!(" {sign} {}", term_css(t))
-            }).collect::<String>()),
+            Value::Calc(c) => format!(
+                "calc({})",
+                c.terms
+                    .iter()
+                    .map(|(s, t)| {
+                        let sign = if *s < 0.0 { "-" } else { "+" };
+                        format!(" {sign} {}", term_css(t))
+                    })
+                    .collect::<String>()
+            ),
             Value::Raw(r) => r.clone(),
         }
     }
@@ -359,8 +368,10 @@ impl<'a> ValueParser<'a> {
     }
 
     fn skip_ws(&mut self) {
-        while matches!(self.peek(), Some(' ') | Some('\t') | Some('\n') | Some('\r') | Some('\u{c}'))
-        {
+        while matches!(
+            self.peek(),
+            Some(' ') | Some('\t') | Some('\n') | Some('\r') | Some('\u{c}')
+        ) {
             self.i += 1;
         }
     }
@@ -394,8 +405,12 @@ impl<'a> ValueParser<'a> {
                 self.i += 1;
                 Some(Value::Keyword("/".into()))
             }
-            c if c.is_ascii_digit() || c == '.' || ((c == '+' || c == '-') && self.is_number_start())
-             => self.parse_number(),
+            c if c.is_ascii_digit()
+                || c == '.'
+                || ((c == '+' || c == '-') && self.is_number_start()) =>
+            {
+                self.parse_number()
+            }
             c if is_ident_start(c) => self.parse_ident_or_function(),
             _ => {
                 self.i += 1;
@@ -410,7 +425,9 @@ impl<'a> ValueParser<'a> {
 
     /// `e` is only an exponent when digits follow (`1e3`, not `2em`).
     fn is_exponent(&self) -> bool {
-        let s: String = self.c[self.i..(self.i + 3).min(self.c.len())].iter().collect();
+        let s: String = self.c[self.i..(self.i + 3).min(self.c.len())]
+            .iter()
+            .collect();
         let bytes: Vec<char> = s.chars().collect();
         match bytes.as_slice() {
             [_, d, ..] if d.is_ascii_digit() => true,
@@ -529,7 +546,14 @@ impl<'a> ValueParser<'a> {
             return Some(match lower.as_str() {
                 "calc" => Value::Calc(parse_calc("calc", args)),
                 "rgb" | "rgba" | "hsl" | "hsla" => {
-                    let css = format!("{}({})", lower, args.iter().map(|a| a.to_css()).collect::<Vec<_>>().join(", "));
+                    let css = format!(
+                        "{}({})",
+                        lower,
+                        args.iter()
+                            .map(|a| a.to_css())
+                            .collect::<Vec<_>>()
+                            .join(", ")
+                    );
                     match Color::parse(&css) {
                         Some(c) => Value::Color(c),
                         None => Value::Function { name: lower, args },
@@ -543,7 +567,6 @@ impl<'a> ValueParser<'a> {
         }
         Some(Value::Keyword(name.to_ascii_lowercase()))
     }
-
 }
 
 /// Turn `calc(...)`/`min(...)`/`max(...)`/`clamp(...)` arguments into a term list.
@@ -572,7 +595,11 @@ pub fn parse_calc(name: &str, args: Vec<Value>) -> CalcExpr {
                     Value::Length(v, u) => Some(CalcTerm::Length(*v, *u, 1.0)),
                     Value::Number(n) => Some(CalcTerm::Number(*n)),
                     Value::Function { name: f, args } if f == "var" => {
-                        let var_name = args.first().and_then(|v| v.as_str()).unwrap_or("").to_string();
+                        let var_name = args
+                            .first()
+                            .and_then(|v| v.as_str())
+                            .unwrap_or("")
+                            .to_string();
                         let fallback = if args.len() > 1 {
                             let mut f = DeclarationValue::new();
                             f.parts = args[1..].to_vec();

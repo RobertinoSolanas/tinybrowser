@@ -43,8 +43,9 @@ pub fn screenshot(fb: &Framebuffer, path: Option<&std::path::Path>) -> tb_core::
     if let Some(path) = path {
         if let Some(dir) = path.parent() {
             if !dir.as_os_str().is_empty() {
-                std::fs::create_dir_all(dir)
-                    .map_err(|e| tb_core::TbError::Io(format!("cannot create {}: {e}", dir.display())))?;
+                std::fs::create_dir_all(dir).map_err(|e| {
+                    tb_core::TbError::Io(format!("cannot create {}: {e}", dir.display()))
+                })?;
             }
         }
         std::fs::write(path, &bytes)

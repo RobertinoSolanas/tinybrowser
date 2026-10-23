@@ -81,7 +81,11 @@ mod tests {
     #[test]
     fn ua_sheet_parses_cleanly() {
         let sheet = ua_stylesheet();
-        assert!(sheet.style_rule_count() > 30, "rules: {}", sheet.style_rule_count());
+        assert!(
+            sheet.style_rule_count() > 30,
+            "rules: {}",
+            sheet.style_rule_count()
+        );
         assert!(sheet.declaration_count() > 60);
         // nothing of the UA sheet may be silently dropped
         let dump = sheet.debug_dump();

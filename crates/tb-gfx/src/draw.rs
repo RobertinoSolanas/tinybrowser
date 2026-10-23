@@ -44,7 +44,13 @@ impl BoxPaint {
         }
         let has_border = self.border_widths.iter().any(|w| *w > 0.0);
         if has_border {
-            fb.stroke_rect(rect, self.border_widths, self.border_colors, self.border_dash, clip);
+            fb.stroke_rect(
+                rect,
+                self.border_widths,
+                self.border_colors,
+                self.border_dash,
+                clip,
+            );
         }
     }
 }
@@ -89,24 +95,48 @@ impl TextPaint {
         let font = crate::font::Font::system();
         let w = if self.letter_spacing != 0.0 {
             font.draw_spaced(
-                fb, x, baseline, text, self.size, self.bold, self.letter_spacing, self.color, clip,
+                fb,
+                x,
+                baseline,
+                text,
+                self.size,
+                self.bold,
+                self.letter_spacing,
+                self.color,
+                clip,
             )
         } else if self.italic {
             self.draw_oblique(fb, x, baseline, text, clip)
         } else {
-            font.draw(fb, x, baseline, text, self.size, self.bold, self.color, clip)
+            font.draw(
+                fb, x, baseline, text, self.size, self.bold, self.color, clip,
+            )
         };
         if self.underline {
             self.draw_decoration(fb, x, baseline, w, 1.0, clip);
         }
         if self.strike {
-            self.draw_decoration(fb, x, baseline - font.ascent(self.size) * 0.35, w, 1.0, clip);
+            self.draw_decoration(
+                fb,
+                x,
+                baseline - font.ascent(self.size) * 0.35,
+                w,
+                1.0,
+                clip,
+            );
         }
         w
     }
 
     /// Poor-man's italic: shift each glyph row a bit further right per row.
-    fn draw_oblique(&self, fb: &mut Framebuffer, x: f32, baseline: f32, text: &str, clip: Option<Rect>) -> f32 {
+    fn draw_oblique(
+        &self,
+        fb: &mut Framebuffer,
+        x: f32,
+        baseline: f32,
+        text: &str,
+        clip: Option<Rect>,
+    ) -> f32 {
         let font = crate::font::Font::system();
         let scale = font.scale(self.size);
         let mut pen_x = x.round() as i32;
@@ -230,7 +260,11 @@ pub fn paint_placeholder(
 pub fn paint_checkerboard(fb: &mut Framebuffer, cell: u32, a: Color, b: Color) {
     for y in 0..fb.height {
         for x in 0..fb.width {
-            let c = if ((x / cell) + (y / cell)) % 2 == 0 { a } else { b };
+            let c = if ((x / cell) + (y / cell)) % 2 == 0 {
+                a
+            } else {
+                b
+            };
             fb.pixels[(y * fb.width + x) as usize] = c;
         }
     }
@@ -280,7 +314,16 @@ mod tests {
         let mut slanted = Framebuffer::new(40, 20);
         upright.clear(Color::WHITE);
         slanted.clear(Color::WHITE);
-        font.draw(&mut upright, 2.0, 14.0, "AAAA", 14.0, false, Color::BLACK, None);
+        font.draw(
+            &mut upright,
+            2.0,
+            14.0,
+            "AAAA",
+            14.0,
+            false,
+            Color::BLACK,
+            None,
+        );
         let p = TextPaint {
             italic: true,
             size: 14.0,
@@ -295,7 +338,13 @@ mod tests {
     fn placeholder_has_frame_and_alt_text() {
         let mut fb = Framebuffer::new(120, 60);
         fb.clear(Color::WHITE);
-        paint_placeholder(&mut fb, Rect::new(10.0, 10.0, 100.0, 40.0), "Fahrrad", 14.0, None);
+        paint_placeholder(
+            &mut fb,
+            Rect::new(10.0, 10.0, 100.0, 40.0),
+            "Fahrrad",
+            14.0,
+            None,
+        );
         assert_eq!(fb.get(10, 10), Color::rgb(0xaa, 0xaa, 0xaa), "border");
         assert_eq!(fb.get(0, 0), Color::WHITE, "outside untouched");
         assert!(fb.count_non_matching(Color::WHITE) > 500);
