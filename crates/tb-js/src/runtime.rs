@@ -1052,6 +1052,30 @@ impl Interp {
         Ok(self.last_value.clone())
     }
 
+    /// Install a global the way a host embedding means to: as a property of
+    /// `globalThis` **and** as a binding of the global scope, so both
+    /// `window.foo` and a bare `foo` resolve to the same value. (Identifier
+    /// lookup checks the scope's variables first, so writing only the global
+    /// object leaves an engine-internal stub in front of the host's version.)
+    pub fn set_global(&mut self, name: &str, value: Value) {
+        self.globals
+            .borrow_mut()
+            .define_internal(name, value.clone());
+        env::set_global(&self.env, name, value);
+    }
+
+    /// [`Interp::set_global`] for a native function.
+    pub fn set_global_fn(
+        &mut self,
+        name: &str,
+        length: u32,
+        f: impl Fn(&mut Interp, Value, Vec<Value>) -> Result<Value, Value> + 'static,
+    ) -> Value {
+        let v = self.native_fn(name, length, f);
+        self.set_global(name, v.clone());
+        v
+    }
+
     pub fn globals_value(&self) -> Value {
         Value::Object(self.globals.clone())
     }

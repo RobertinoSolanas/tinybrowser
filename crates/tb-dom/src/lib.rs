@@ -40,6 +40,13 @@ impl NodeId {
     pub fn raw(self) -> (u32, u32) {
         (self.idx, self.gen)
     }
+
+    /// Rebuild a handle from its raw parts. Used by host bindings that have to
+    /// park a node reference inside a JavaScript value; a handle that was freed
+    /// simply stops resolving, it never points at a different node.
+    pub const fn from_raw(idx: u32, gen: u32) -> NodeId {
+        NodeId { idx, gen }
+    }
 }
 
 impl fmt::Debug for NodeId {

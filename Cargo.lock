@@ -159,6 +159,7 @@ name = "tb-dom-bindings"
 version = "0.1.0"
 dependencies = [
  "tb-core",
+ "tb-css",
  "tb-dom",
  "tb-html",
  "tb-js",

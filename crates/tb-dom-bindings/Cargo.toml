@@ -9,6 +9,7 @@ authors.workspace = true
 
 [dependencies]
 tb-core.workspace = true
+tb-css.workspace = true
 tb-dom.workspace = true
 tb-html.workspace = true
 tb-style.workspace = true

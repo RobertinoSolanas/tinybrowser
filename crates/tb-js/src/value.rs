@@ -561,6 +561,11 @@ impl Obj {
     /// `String(obj)` without calling user code (the interpreter has the
     /// spec-correct version that uses `toString`/`valueOf`).
     pub fn default_string(&self) -> String {
+        // host objects (DOM nodes, events, …) name their class in `@@class`,
+        // which is what `String(div)` and `console.log(div)` must print
+        if let Some(class) = self.host_class() {
+            return format!("[object {class}]");
+        }
         match &self.kind {
             Kind::Array { items } => {
                 let parts: Vec<String> = items
@@ -597,6 +602,14 @@ impl Obj {
         }
     }
 
+    /// The class a host binding declared for this object (`@@class`), if any.
+    pub fn host_class(&self) -> Option<String> {
+        self.get_own(&Key::Name(Rc::from("@@class")))
+            .and_then(|p| p.value())
+            .and_then(|v| v.as_str())
+            .map(|s| s.to_string())
+    }
+
     pub fn len_hint(&self) -> usize {
         match &self.kind {
             Kind::Array { items } => items.len(),
@@ -627,6 +640,9 @@ impl Obj {
             Kind::Date(_) | Kind::RegExp(_) | Kind::Error => self.default_string(),
             Kind::Wrapper(inner) => inspect_value(inner, depth),
             Kind::Plain => {
+                if let Some(class) = self.host_class() {
+                    return format!("[object {class}]");
+                }
                 if depth > 2 {
                     return "{ … }".into();
                 }

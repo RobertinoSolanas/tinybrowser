@@ -46,7 +46,7 @@ impl P {
         }
     }
     fn word(&mut self, w: &str) -> bool {
-        if self.b[self.i..].iter().collect::<String>().starts_with(w) {
+        if self.i < self.b.len() && self.b[self.i..].iter().collect::<String>().starts_with(w) {
             self.i += w.chars().count();
             return true;
         }
@@ -54,6 +54,9 @@ impl P {
     }
 
     fn value(&mut self) -> Result<Value, String> {
+        // whitespace belongs between every pair of tokens, so skipping it here
+        // once and for all is what makes `{"a": 1}` (space after the colon!) parse
+        self.ws();
         self.depth += 1;
         if self.depth > MAX_DEPTH {
             return Err("nested too deeply".into());

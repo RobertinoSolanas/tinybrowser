@@ -23,7 +23,8 @@ falsche Art von "tiny".
 | `tb-gfx` (Framebuffer, 5×7-Bitmap-Font, PNG-Encoder) | ✅ fertig (PNG von PIL unabhängig verifiziert) | 33 |
 | `tb-layout` (Box-Baum, Block/Inline/Flex, Intrinsic Sizing, Hit-Test) | ✅ fertig (taz.de: 3451 Boxen in **2,7 ms**) | 44 |
 | `tb-js` (Lexer, Parser, Interpreter, Objekte, Promise/Async, RegExp, JSON) | ✅ fertig (taz.de: 47 KB echtes Inline-JS in **1,5 ms**, 12/12 Skripte sauber) | 112 |
-| `tb-dom-bindings`, `tb-browser`, `tiny` | 🚧 als nächstes | — |
+| `tb-dom-bindings` (window/document/Element, Events, `<script>`, Forms) | ✅ fertig (Wrapper mit Node-Handles, Timer, fetch-Hook) | 78 |
+| `tb-browser`, `tiny` (Orchestrierung + CLI) | 🚧 als nächstes | — |
 
 Der detaillierte Fortschritt steht in [`todolist.md`](todolist.md) (jede Aufgabe
 wird beim Fertigstellen abgehakt).

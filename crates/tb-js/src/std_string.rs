@@ -573,10 +573,9 @@ fn expand_replacement(tpl: &str, m: &super::regexp::MatchInfo, input: &str) -> S
                 }
                 let idx: usize = num.parse().unwrap_or(0);
                 if idx == 0 {
+                    // `$0` is not a capture reference — it stays as written
                     out.push('$');
                     out.push('0');
-                } else if idx == 0 {
-                    out.push_str(&m.text);
                 } else {
                     match m.groups.get(idx) {
                         Some(Some(g)) => out.push_str(g),

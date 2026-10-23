@@ -349,7 +349,11 @@ fn install_object_proto(it: &mut Interp, p: &ObjRef) {
         Value::Null => Ok(Value::string("[object Null]")),
         Value::Object(o) => Ok(Value::string(format!(
             "[object {}]",
-            o.borrow().class_name()
+            // a host binding (DOM node, event, …) names its own class
+            o.borrow().host_class().unwrap_or_else(|| {
+                let name = o.borrow().class_name();
+                name.to_string()
+            })
         ))),
         other => Ok(Value::string(format!("[object {}]", cap(other.type_of())))),
     });

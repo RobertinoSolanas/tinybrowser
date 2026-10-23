@@ -188,25 +188,58 @@ Legende: `[ ]` = offen, `[x]` = DONE, `[~]` = teilweise / später verfeinert.
 
 ## 8. Context `scripting` — DOM-Bindings (`tb-dom-bindings`)
 
-- [ ] **T8.1** `window`/`globalThis`, `self`, `navigator`, `location` (href/protocol/host/
+- [x] **T8.1** `window`/`globalThis`, `self`, `navigator`, `location` (href/protocol/host/
       pathname/search/hash/reload/assign), `history` (pushState/light), `screen`,
       `document` (documentElement, head, body, title, charset, readyState, referrer, URL,
       hidden, visibilityState)
-- [ ] **T8.2** Node/Element-API: `getElementById`, `getElementsByTagName`,
+      + `document.cookie` (DOM-Cookie-Jar in `tb-net`), `localStorage`/`sessionStorage`,
+      `matchMedia`, `getComputedStyle`, `requestAnimationFrame`, `fetch` (Hook statt
+      echtem Netz), `alert/confirm/prompt` werden als Problem protokolliert und
+      automatisch beantwortet; Navigationen (`location.href = …`, `form.submit()`,
+      Anchor-`click()`) landen als `NavRequest` im Host, damit die Application Layer
+      sie ausfuehrt
+- [x] **T8.2** Node/Element-API: `getElementById`, `getElementsByTagName`,
       `getElementsByClassName`, `querySelector`, `querySelectorAll`, `createElement`,
       `createTextNode`, `appendChild`, `insertBefore`, `removeChild`, `remove`, `replaceWith`,
       `parentNode/childNodes/children/firstElementChild/nextElementSibling`,
       `textContent`, `innerHTML`, `outerHTML`, `className`, `id`, `classList`
       (add/remove/toggle/contains), `getAttribute/setAttribute/removeAttribute/hasAttribute`,
       `dataset`, `style` (inline), `matches`, `closest`, `getBoundingClientRect`
-- [ ] **T8.3** Event-System: `addEventListener`/`removeEventListener`/`dispatchEvent`,
+      + `insertBefore/replaceChild/cloneNode/normalize/contains/isEqualNode/getRootNode`,
+      `append/prepend/replaceChildren/before/after`, `attributes` (NamedNodeMap),
+      `insertAdjacentHTML/insertAdjacentElement`, `<label>.control`, `el.form`,
+      Form-Controls (value/defaultValue/checked/selected/options/files, `FormData`,
+      `form.submit()/reset()`), URL-Reflexion (`a.href` absolut, `a.searchParams`),
+      Fokus (`focus()/blur()/activeElement`)
+      - Wrapper sind flache JS-Objekte mit verstecktem `@@node`-Handle (`idx:gen`) und
+        Prototype-Methoden; tote Handles liefern `null`, ein stale Handle kann kein
+        fremdes Node treffen
+      - `tb_js` kennt keinen Proxy: `dataset` und `Storage` sind gespiegelte Objekte,
+        die an Flush-Punkten (JS -> Rust / Rust -> JS) abgeglichen werden
+- [~] **T8.3** Event-System: `addEventListener`/`removeEventListener`/`dispatchEvent`,
       Event-Objekt (type, target, currentTarget, preventDefault, stopPropagation, bubbles),
       Bubbling/Capture, `onclick`-Attribute, DOMContentLoaded + load-Events
-- [ ] **T8.4** Script-Integration: `<script>` in Dokumentreihenfolge ausführen
+      + capture/target/bubble mit `eventPhase`, `stopImmediatePropagation`,
+      Self-Repaint-Guard (kein Listener laeuft zweimal fuer dasselbe Event),
+      `window`/`document` als Targets, Event-Konstruktoren (`Event`, `CustomEvent`
+      inkl. `detail`, `MouseEvent`, `KeyboardEvent`, `FocusEvent`, `InputEvent`,
+      `HashChangeEvent`, …), `on<type>`-Attribute und -Properties, Klick-Toggle von
+      checkbox/radio inkl. `change`, `focus`/`blur`
+      - [~] `AbortController`/`AbortSignal` ohne Wiring,
+            `IntersectionObserver`/`ResizeObserver`/`MutationObserver` bleiben Stubs
+- [x] **T8.4** Script-Integration: `<script>` in Dokumentreihenfolge ausführen
       (inline + `src` über `tb-net`), `type=module`/`application/ld+json` erkennen und
       nicht als klassisches JS ausführen
-- [ ] **T8.5** Tests: Skript lädt DOM, `querySelectorAll`-Ergebnisse, `innerHTML`-Roundtrip,
+      + `async`/`defer` (defer in Dokumentreihenfolge, async sobald fertig), externe
+      Skripte über `FetchHook`, `ScriptOptions::timer_budget_ms`, `pump()` zum
+      Abarbeiten von Timern nach dem Load, Mikrotasks nach jedem Skript und zwischen
+      Timern, `document.write()` (Inkremental-Parse, vor dem ersten Skript auf den
+      finalen Baum umgeschaltet, spaetere Writes als Text-Knoten)
+      - `type=module` wird erkannt und mit Problem uebersprungen (kein Module-Loader)
+- [x] **T8.5** Tests: Skript lädt DOM, `querySelectorAll`-Ergebnisse, `innerHTML`-Roundtrip,
       Event-Dispatch mit Bubbling, `classList`, DOMContentLoaded-Reihenfolge
+      — 78 Tests: `dom.rs` (21), `events.rs` (18), `script.rs` (16), `window.rs` (23)
+      + Doctest; gemeinsame Harness in `tests/common`
 
 ## 9. Application Layer — Browser-Orchestrierung (`tb-browser`, `tb-cli`)
 

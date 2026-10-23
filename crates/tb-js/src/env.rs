@@ -131,6 +131,30 @@ pub fn copy_values(from: &EnvRef, dst: &EnvRef) {
     }
 }
 
+/// The root (global) scope of `env`.
+pub fn global_scope(env: &EnvRef) -> EnvRef {
+    let mut cur = env.clone();
+    loop {
+        let parent = cur.borrow().parent.clone();
+        match parent {
+            Some(p) => cur = p,
+            None => break cur,
+        }
+    }
+}
+
+/// Write a global binding so that **both** look-up paths see it: identifiers
+/// resolve through the global scope's variables first, `window.x` through the
+/// global object. A host embedding (DOM bindings!) that only writes one of the
+/// two gets a binding that works for `window.x` and throws for the bare name —
+/// so `set_global` always writes both.
+pub fn set_global(env: &EnvRef, name: &str, value: Value) {
+    global_scope(env)
+        .borrow_mut()
+        .vars
+        .insert(Rc::from(name), value);
+}
+
 /// `var` declarations belong to the nearest function/global scope.
 pub fn var_scope(env: &EnvRef) -> EnvRef {
     let mut cur = env.clone();
