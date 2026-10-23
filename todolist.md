@@ -243,21 +243,65 @@ Legende: `[ ]` = offen, `[x]` = DONE, `[~]` = teilweise / später verfeinert.
 
 ## 9. Application Layer — Browser-Orchestrierung (`tb-browser`, `tb-cli`)
 
-- [ ] **T9.1** `Navigation` (Aggregate): Zustand `Idle → Fetching → Parsed → Styled →
+- [x] **T9.1** `Navigation` (Aggregate): Zustand `Idle → Fetching → Parsed → Styled →
       LaidOut → Scripted → Rendered / Failed`, History-Stack, `back()/forward()`
-- [ ] **T9.2** `ResourceLoader`: Subresources (CSS via `<link>`, `<style>`, Inline-`style=`),
+      — `NavState` (Idle→Fetching→Parsed→Styled→LaidOut→Scripted→Rendered/Failed) als
+      Zustand der Navigation; `History` mit `back()/forward()/reload()` (Reload leert den
+      HTTP-Cache), gemerkt wird die **finale** URL nach Redirects.
+      Navigationen, die JS ausloest (`location.href`, `form.submit()`, Anchor-`click()`),
+      landen als `NavRequest` an der Page und fuehrt der Embedder aus
+      (`Engine::navigate_to`) — ein Browser navigiert auch mitten im Skript nicht
+- [x] **T9.2** `ResourceLoader`: Subresources (CSS via `<link>`, `<style>`, Inline-`style=`),
       Skripte parallel geladen (eigener Thread-Pool), URL-Auflösung gegen Base-URL,
       Cache-Benutzung, Limits (Anzahl/Größe)
-- [ ] **T9.3** `Page`: vereint Document + Stylesheets + ComputedStyles + BoxTree +
+      — `Rc<RefCell<ResourceLoader>>` pro Seite, damit `fetch`-Hook, Skript-Loader und
+      `tb_style::resolve_sources` dieselbe Budget-/Dedupe-Logik benutzen; URL-Auflösung
+      gegen die Basis-URL; `file:` und `data:` ohne Netz; Antworten werden gemerkt
+      (ein zweites `<link>` auf dieselbe Datei kostet keinen Request);
+      `config.max_subresources` als Budget + Problem, wenn es aufgebraucht ist
+- [x] **T9.3** `Page`: vereint Document + Stylesheets + ComputedStyles + BoxTree +
       Problems + Console-Log; `page.text()`, `page.links()`, `page.titles()`,
       `page.dump_dom()`, `page.render()`, `page.screenshot(png)`
-- [ ] **T9.4** `Engine`-Fassade: `fetch`, `load(url)`, `load_html(base,url)`, `eval(js)`
-- [ ] **T9.5** CLI `tiny`: `--dom --text --links --css --layout --js --console
+      — `text()` ueberspringt `script/style/head` **und** `display:none`/
+      `visibility:hidden` (ueber die ComputedStyles), dazu `links()` (aufgeloest),
+      `headings()`, `titles()`, `console()`, `stats()`, `element_at()`, `rect_of()`,
+      `click()`, `eval()`, `pump()`, `set_viewport()`
+      — Maler in `paint.rs`: Hintergrund/Rahmen bottom-up, Text-Runs darueber,
+        `overflow` clippt, negatives `z-index` zuerst, `position: fixed` ignoriert den
+        Scroll-Offset, `visibility:hidden` malt nichts (ein Kind darf aber `visible`
+        sagen), `<img>` wird der Platzhalter mit `alt`-Text; Render-Cache faellt bei
+        Re-Layout weg
+- [x] **T9.4** `Engine`-Fassade: `fetch`, `load(url)`, `load_html(base,url)`, `eval(js)`
+      — `Engine::new` (mit Netz) und `Engine::offline` (nur `file:`/`data:`); `eval`
+      lebt an der `Page` (die den Interpreter besitzt), nicht an der Fassade
+      — Cookie-Jar geteilt: `Set-Cookie` landet in `document.cookie`, was ein Skript
+      setzt, geht zurueck in die Jar und wird beim naechsten Request mitsendet
+      — Style+Layout laufen **nach** den Skripten (massgeblich ist der Baum, den die
+        Skripte hinterlassen haben); `eval`/`fire`/`pump` ziehen Style+Layout nach
+- [x] **T9.5** CLI `tiny`: `--dom --text --links --css --layout --js --console
       --screenshot out.png --width --height --no-js --timeout --verbose --repl`
-- [ ] **T9.6** E2E-Tests gegen lokalen `tb-testkit`-Server: vollständiger Pageload,
+      + `--no-layout`, `--no-net`, `--scale`, `--full-height`, `--scroll-y`,
+      `--problems`, `--quiet`, `--serve DIR` (statischer Server fuer Demos);
+      bare URL/Datei gibt die Zusammenfassung, explizite Flags genau ihre Ausgabe;
+      Exit-Codes 0 ok / 1 Ladefehler / 2 Bedienung
+- [x] **T9.6** E2E-Tests gegen lokalen `tb-testkit`-Server: vollständiger Pageload,
       CSS-Anwendung, JS-Ausführung, Screenshot nicht leer, Navigation via Klick/History
-- [ ] **T9.7** JUnit: `cargo junit` (xtask) wandelt `cargo test`-Ausgabe in
+      — `tests/e2e.rs` (12): externes CSS, `<script src>` in Dokumentreihenfolge,
+      `@import`, Dedupe, 404 als Problem, Klick -> Navigation -> `back()`,
+      `location.href`, Cookies in beide Richtungen, Redirect auf die finale URL,
+      Subresource-Budget, Seite mit Navigation/Articles/Formular
+      — `tests/taz_de.rs` (5): 422-KB-Snapshot durch die ganze Pipeline (Elemente,
+      Links, Boxen, Regeln, Text, Screenshot mit Tinte, NaN-freie Geometrie, JS aus vs.
+      an); Debug-Lauf < 1 s
+      — `crates/tb-cli/tests/cli.rs` (15): Zusammenfassung, die Ausgabe-Flags,
+      `--no-js`, PNG-Header nach `--width/--height`, `--problems`, Exit-Codes,
+      `--help`, `--serve`
+- [x] **T9.7** JUnit: `cargo junit` (xtask) wandelt `cargo test`-Ausgabe in
       `target/junit.xml` (Suite pro Test-Target, stdout/err, Fehlermeldungen, Skip)
+      — Alias in `.cargo/config.toml`, laeuft pro Package; Suite-Namen aus den
+        cargo-Statuszeilen (`tb_dom_bindings::tests::dom`) plus `::doc` fuer Doc-Tests;
+        `---- name stdout ----`-Bloecke werden den Faellen zugeordnet; `<skipped/>`
+        fuer `ignored`; Exit-Code bleibt der des Testlaufs (aktuell 44 Suiten, 537 Tests)
 
 ## 10. Abnahme: taz.de
 

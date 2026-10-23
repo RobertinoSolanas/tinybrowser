@@ -166,6 +166,24 @@ impl Url {
             });
         }
 
+        if scheme == "file" {
+            // Local files have no authority: `file:///etc/hosts` is the path
+            // `/etc/hosts`. A `file://server/share` UNC form is treated as a
+            // plain path too — this is a console browser, not a SMB client.
+            let body = rest.strip_prefix("//").unwrap_or(rest);
+            let path = if body.is_empty() { "/" } else { body };
+            return Ok(Url {
+                scheme,
+                username: String::new(),
+                password: None,
+                host: String::new(),
+                port: None,
+                path: normalize_path(&path.replace('\\', "/")),
+                query,
+                fragment,
+            });
+        }
+
         let body = rest.strip_prefix("//").unwrap_or(rest);
         // authority ends at the first `/`
         let (authority, path) = match body.find('/') {

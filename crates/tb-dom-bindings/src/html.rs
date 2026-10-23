@@ -485,80 +485,9 @@ pub fn install(it: &mut Interp, host: &HostRef, proto: &ObjRef) {
     // ---------------------------------------------------------- interaction --
     // click/focus/blur dispatch events → no host borrow while they run
     method_unlocked(it, host, proto, "click", 0, |it, href, id, _args| {
-        let allow = events::fire(href, it, EvtTarget::node(id), "click", true)?;
-        if !allow.to_boolean() {
-            return Ok(Value::Undefined);
-        }
-        // a checkbox or radio button reacts to the click, then says so
-        let control = {
-            let Ok(h) = href.try_borrow() else {
-                return Ok(Value::Undefined);
-            };
-            match h.dom.tag(id) {
-                Some("input") => match h.dom.attr(id, "type").as_deref() {
-                    Some("checkbox") => Some(true),
-                    Some("radio") => Some(false),
-                    _ => None,
-                },
-                _ => None,
-            }
-        };
-        if let Some(toggle) = control {
-            let changed = {
-                let Ok(mut h) = href.try_borrow_mut() else {
-                    return Ok(Value::Undefined);
-                };
-                if toggle {
-                    if h.dom.has_attr(id, "checked") {
-                        h.dom.remove_attr(id, "checked");
-                    } else {
-                        h.dom.set_attr(id, "checked", "");
-                    }
-                    true
-                } else if !h.dom.has_attr(id, "checked") {
-                    // a radio button unchecks its siblings of the same name
-                    let name = h.dom.attr(id, "name").unwrap_or_default();
-                    let siblings = h.dom.get_elements_by_tag("input");
-                    for s in siblings {
-                        if s != id
-                            && h.dom.attr(s, "type").as_deref() == Some("radio")
-                            && h.dom.attr(s, "name").unwrap_or_default() == name
-                        {
-                            h.dom.remove_attr(s, "checked");
-                        }
-                    }
-                    h.dom.set_attr(id, "checked", "");
-                    true
-                } else {
-                    false
-                }
-            };
-            if changed {
-                events::fire(href, it, EvtTarget::node(id), "change", true)?;
-            }
-        }
-        // a link whose click was not prevented asks the browser to navigate
-        let (is_anchor, href_attr) = {
-            let Ok(h) = href.try_borrow() else {
-                return Ok(Value::Undefined);
-            };
-            (
-                h.dom.tag(id) == Some("a"),
-                h.dom.attr(id, "href").unwrap_or_default(),
-            )
-        };
-        if is_anchor && !href_attr.is_empty() && !href_attr.starts_with('#') {
-            let url = {
-                let h = href
-                    .try_borrow()
-                    .map_err(|_| it.type_error("click: DOM is busy"))?;
-                resolve_display(&h, &href_attr)
-            };
-            let mut h = href
-                .try_borrow_mut()
-                .map_err(|_| it.type_error("click: DOM is busy"))?;
-            h.request(crate::host::NavRequest::Load(url));
-        }
+        // `fire` also runs the default action, so `el.click()` and a click the
+        // embedder fired from outside behave exactly the same
+        events::fire(href, it, EvtTarget::node(id), "click", true)?;
         Ok(Value::Undefined)
     });
     method_unlocked(it, host, proto, "focus", 0, |it, href, id, _args| {
@@ -762,4 +691,88 @@ fn selected_index(dom: &tb_dom::Dom, id: NodeId) -> usize {
     opts.iter()
         .position(|o| dom.has_attr(*o, "selected"))
         .unwrap_or(if opts.is_empty() { 0 } else { 0 })
+}
+
+/// What a click does when no listener cancelled it: a checkbox or radio button
+/// changes state (and fires `change`), an anchor asks the browser to navigate.
+///
+/// Lives here and is called from `events::fire`, so `el.click()` and a click
+/// the embedder fired (`Page::click`, a hit test, a real pointer event) take
+/// the same path — a browser has one click, not two.
+pub fn click_default_action(
+    host: &crate::host::HostRef,
+    it: &mut tb_js::Interp,
+    id: tb_dom::NodeId,
+) -> tb_js::JsResult<tb_js::Value> {
+    // a checkbox or radio button reacts to the click, then says so
+    let control = {
+        let Ok(h) = host.try_borrow() else {
+            return Ok(Value::Undefined);
+        };
+        match h.dom.tag(id) {
+            Some("input") => match h.dom.attr(id, "type").as_deref() {
+                Some("checkbox") => Some(true),
+                Some("radio") => Some(false),
+                _ => None,
+            },
+            _ => None,
+        }
+    };
+    if let Some(toggle) = control {
+        let changed = {
+            let Ok(mut h) = host.try_borrow_mut() else {
+                return Ok(Value::Undefined);
+            };
+            if toggle {
+                if h.dom.has_attr(id, "checked") {
+                    h.dom.remove_attr(id, "checked");
+                } else {
+                    h.dom.set_attr(id, "checked", "");
+                }
+                true
+            } else if !h.dom.has_attr(id, "checked") {
+                // a radio button unchecks its siblings of the same name
+                let name = h.dom.attr(id, "name").unwrap_or_default();
+                let siblings = h.dom.get_elements_by_tag("input");
+                for s in siblings {
+                    if s != id
+                        && h.dom.attr(s, "type").as_deref() == Some("radio")
+                        && h.dom.attr(s, "name").unwrap_or_default() == name
+                    {
+                        h.dom.remove_attr(s, "checked");
+                    }
+                }
+                h.dom.set_attr(id, "checked", "");
+                true
+            } else {
+                false
+            }
+        };
+        if changed {
+            events::fire(host, it, EvtTarget::node(id), "change", true)?;
+        }
+    }
+    // a link whose click was not prevented asks the browser to navigate
+    let (is_anchor, href_attr) = {
+        let Ok(h) = host.try_borrow() else {
+            return Ok(Value::Undefined);
+        };
+        (
+            h.dom.tag(id) == Some("a"),
+            h.dom.attr(id, "href").unwrap_or_default(),
+        )
+    };
+    if is_anchor && !href_attr.is_empty() && !href_attr.starts_with('#') {
+        let url = {
+            let h = host
+                .try_borrow()
+                .map_err(|_| it.type_error("click: DOM is busy"))?;
+            resolve_display(&h, &href_attr)
+        };
+        let mut h = host
+            .try_borrow_mut()
+            .map_err(|_| it.type_error("click: DOM is busy"))?;
+        h.request(crate::host::NavRequest::Load(url));
+    }
+    Ok(Value::Undefined)
 }

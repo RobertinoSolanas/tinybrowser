@@ -466,7 +466,20 @@ pub fn fire(
     o.borrow_mut()
         .define_value("cancelable", Value::Boolean(cancelable));
     let ev = make_event(it, kind, Some(Value::Object(o)), proto);
-    dispatch(host, it, target, ev)
+    let allow = dispatch(host, it, target, ev)?;
+    // The default action belongs to the click, not to `HTMLElement.click()`:
+    // a click the embedder fired has to toggle a checkbox and follow a link
+    // too, as long as no listener cancelled it.
+    if kind == "click" && allow.to_boolean() {
+        if let EvtTarget::Node(handle) = target {
+            let id = handle.id();
+            let alive = host.try_borrow().map(|h| h.dom.exists(id)).unwrap_or(false);
+            if alive {
+                crate::html::click_default_action(host, it, id)?;
+            }
+        }
+    }
+    Ok(allow)
 }
 
 // ---------------------------------------------------------------------------

@@ -141,7 +141,7 @@ pub fn run_document(
                 report.skipped += 1;
                 continue;
             }
-            let source = match (kind, src_text) {
+            let source = match (kind.clone(), src_text) {
                 (Some(url), None) => match fetch(&url) {
                     Some(text) => text,
                     None => {
@@ -171,9 +171,22 @@ pub fn run_document(
                 Err(msg) => {
                     report.failed += 1;
                     it.log("error", format!("[script] {msg}"));
+                    // where the failure happened: an external url, or the first
+                    // line of an inline script — "script error" alone is useless
+                    let context = match &kind {
+                        Some(url) => url.clone(),
+                        None => {
+                            let first = source
+                                .lines()
+                                .find(|l| !l.trim().is_empty())
+                                .unwrap_or("")
+                                .trim();
+                            tb_core::text::truncate(first, 80).to_string()
+                        }
+                    };
                     if let Ok(mut h) = host.try_borrow_mut() {
                         h.problems
-                            .warn(Phase::Script, format!("script error: {msg}"));
+                            .warn_ctx(Phase::Script, format!("script error: {msg}"), context);
                     }
                 }
             }

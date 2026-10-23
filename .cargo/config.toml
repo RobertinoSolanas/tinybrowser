@@ -1,0 +1,4 @@
+# Cargo aliases for the tinybrowser workspace.
+[alias]
+# run the whole suite and write target/junit.xml
+junit = "run --package xtask --quiet -- junit"

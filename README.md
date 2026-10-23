@@ -24,7 +24,9 @@ falsche Art von "tiny".
 | `tb-layout` (Box-Baum, Block/Inline/Flex, Intrinsic Sizing, Hit-Test) | ✅ fertig (taz.de: 3451 Boxen in **2,7 ms**) | 44 |
 | `tb-js` (Lexer, Parser, Interpreter, Objekte, Promise/Async, RegExp, JSON) | ✅ fertig (taz.de: 47 KB echtes Inline-JS in **1,5 ms**, 12/12 Skripte sauber) | 112 |
 | `tb-dom-bindings` (window/document/Element, Events, `<script>`, Forms) | ✅ fertig (Wrapper mit Node-Handles, Timer, fetch-Hook) | 78 |
-| `tb-browser`, `tiny` (Orchestrierung + CLI) | 🚧 als nächstes | — |
+| `tb-browser` (Engine, Navigation, ResourceLoader, Page, Paint) | ✅ fertig (taz.de-Snapshot komplett: parse → script → layout → PNG) | 20 + 12 + 5 |
+| `tiny` (CLI) | ✅ fertig (`--dom/--text/--links/--layout/--screenshot/--repl/…`) | 15 |
+| `xtask` (`cargo junit` → `target/junit.xml`) | ✅ fertig (44 Suiten, 537 Tests) | 5 |
 
 Der detaillierte Fortschritt steht in [`todolist.md`](todolist.md) (jede Aufgabe
 wird beim Fertigstellen abgehakt).
@@ -50,16 +52,22 @@ strict parse: clean
 (`fixtures/js/taz-inline.js` sind die 12 klassischen Inline-Skripte der echten
 taz.de — GPT-Tag, Swiper-Init, Alpine-Reste — committed als Offline-Benchmark.)
 
-**Ziel-Ausgabe** (Phase 9, wenn `tb-browser` + CLI fertig sind — die Zahlen
-stammen aus den aktuellen Fixture-Läufen):
+**Aktuelle Ausgabe** (Phase 9: `tb-browser` + CLI, gemessen am committeden
+taz.de-Snapshot — lokal, ohne die externen Stylesheets der echten Seite):
 
 ```console
-$ cargo run --release -- --screenshot /tmp/taz.png https://taz.de
-→ https://taz.de/  (200 OK, text/html; charset=utf-8, 422271 bytes, 118 ms)
+$ cargo run --release -- fixtures/taz.de.html
+→ file:///…/fixtures/taz.de.html  (200 text/html, 422271 bytes, 0 ms)
 title:    taz.de | taz.de
-elements: 2893   nodes: 8032   links: 262   images: 168   scripts: 31
-pipeline: parse 3 ms · style 51 ms · layout 3 ms · render …
+elements: 2895   nodes: 8034   links: 262   images: 168   scripts: 32
+css:      2 sheets, 9 rules, 2307 elements matched   boxes: 3309
+js:       14 run, 16 skipped, 2 failed   console: 8   problems: 35
+pipeline:   parse 3 ms · style 6 ms · layout 1 ms · script 165 ms
 ```
+
+Mit echtem Netz (die echten taz-Stylesheets) liegt das CSS bei 3 Sheets und
+~2000 Regeln; die 2 Skript-Fehler sind fremde Skripte, die ohne ihre Umgebung
+nicht laufen — sie werden als Problems gemeldet und stoppen die Seite nicht.
 
 ---
 
@@ -88,9 +96,17 @@ tiny [OPTIONS] [URL]
   --screenshot FILE  PNG-Screenshot (eigener Rasterizer + PNG-Encoder)
   --width N          Viewport-Breite (Default 1280)
   --height N         Viewport-Höhe (Default 1024)
+  --scale N          Geräte-Pixel pro CSS-Pixel
+  --full-height      Screenshot über die ganze Dokumenthöhe
+  --scroll-y N       vor dem Malen scrollen
   --no-js            Skripte aus
-  --no-css           CSS aus
+  --no-css           CSS aus (nur UA-Stylesheet)
+  --no-layout        keinen Box-Baum bauen
+  --no-net           kein Netzwerk (Dateien, data:-URLs)
   --timeout MS       Netzwerk-Timeout
+  --problems         gemeldete Probleme (Parse, Netzwerk, Skript) zeigen
+  --verbose, -v      Pipeline-Zeiten und Problem-Kontext
+  --quiet, -q        nur das Explizite, keine Zusammenfassung
   --repl             interaktive JavaScript-Konsole gegen die geladene Seite
   --serve DIR        lokaler Testserver auf 127.0.0.1 (für Demos)
 ```
