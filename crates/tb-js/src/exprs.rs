@@ -107,24 +107,18 @@ impl Interp {
                             setter,
                         } => {
                             let k = self.prop_key(key, env)?;
-                            let g = match getter {
-                                Some(g) => Some(
-                                    self.make_function(g, env, Some(obj.clone()))
-                                        .as_object()
-                                        .cloned()
-                                        .unwrap(),
-                                ),
-                                None => None,
-                            };
-                            let s = match setter {
-                                Some(s) => Some(
-                                    self.make_function(s, env, Some(obj.clone()))
-                                        .as_object()
-                                        .cloned()
-                                        .unwrap(),
-                                ),
-                                None => None,
-                            };
+                            let g = getter.as_ref().map(|g| {
+                                self.make_function(g, env, Some(obj.clone()))
+                                    .as_object()
+                                    .cloned()
+                                    .unwrap()
+                            });
+                            let s = setter.as_ref().map(|s| {
+                                self.make_function(s, env, Some(obj.clone()))
+                                    .as_object()
+                                    .cloned()
+                                    .unwrap()
+                            });
                             let target = obj.as_object().unwrap().clone();
                             target
                                 .borrow_mut()
@@ -135,8 +129,8 @@ impl Interp {
                             protos.push(v.clone());
                             let keys = self.enumerable_keys(&v);
                             for kk in keys {
-                                let val = self.get(&v, &Key::from_str(&kk))?;
-                                self.set(&obj, &Key::from_str(&kk), val)?;
+                                let val = self.get(&v, &Key::parse(&kk))?;
+                                self.set(&obj, &Key::parse(&kk), val)?;
                             }
                         }
                     }

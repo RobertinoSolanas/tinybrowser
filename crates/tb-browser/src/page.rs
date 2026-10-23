@@ -322,11 +322,12 @@ impl Page {
             if !matches!(el.tag.as_str(), "a" | "area") || !el.has_attr("href") {
                 continue;
             }
-            let href = el.attr("href").unwrap_or("");
-            let url = self
-                .loader
-                .borrow()
-                .resolve(href)
+            let href = el.attr("href").unwrap_or("").trim();
+            // what `a.href` says: fragments and `mailto:` included, resolved
+            // against the page — not "can the loader fetch this"
+            let url = Url::join(&self.url, href)
+                .ok()
+                .or_else(|| self.loader.borrow().resolve(href))
                 .map(|u| u.to_string())
                 .unwrap_or_else(|| href.to_string());
             out.push(Link {

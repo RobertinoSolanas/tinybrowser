@@ -165,12 +165,11 @@ pub fn install(it: &mut Interp) {
 
     // Object as a constructor
     let object_ctor = {
-        let v = it.native_ctor(
+        it.native_ctor(
             "Object",
             &object_proto.clone(),
             Some(Rc::new(object_call) as Rc<super::runtime::NativeFn>),
-        );
-        v
+        )
     };
     it.natives.object_ctor = Some(obj_of(object_ctor.clone()));
 
@@ -320,7 +319,7 @@ fn error_call(it: &mut Interp, this: Value, args: Vec<Value>) -> JsResult<Value>
         {
             let _ = name;
         }
-        let msg = match args.get(0) {
+        let msg = match args.first() {
             None | Some(Value::Undefined) => String::new(),
             Some(v) => it.to_string_val(v).unwrap_or_default(),
         };
@@ -402,7 +401,7 @@ fn install_object_proto(it: &mut Interp, p: &ObjRef) {
             return Ok(Value::Boolean(false));
         };
         while let Some(o) = cur {
-            if Rc::ptr_eq(&o, &target) {
+            if Rc::ptr_eq(&o, target) {
                 return Ok(Value::Boolean(true));
             }
             let next = o.borrow().proto.clone();
@@ -470,7 +469,7 @@ fn install_object_ctor_statics(it: &mut Interp, ctor: &ObjRef) {
         let keys = it.own_enumerable(&v)?;
         let mut out = Vec::new();
         for k in keys {
-            out.push(it.get(&v, &Key::from_str(&k))?);
+            out.push(it.get(&v, &Key::parse(&k))?);
         }
         Ok(it.array(out))
     });
@@ -479,7 +478,7 @@ fn install_object_ctor_statics(it: &mut Interp, ctor: &ObjRef) {
         let keys = it.own_enumerable(&v)?;
         let mut out = Vec::new();
         for k in keys {
-            let val = it.get(&v, &Key::from_str(&k))?;
+            let val = it.get(&v, &Key::parse(&k))?;
             out.push(it.array(vec![Value::string(k), val]));
         }
         Ok(it.array(out))
@@ -492,18 +491,15 @@ fn install_object_ctor_statics(it: &mut Interp, ctor: &ObjRef) {
             }
             let keys = it.own_enumerable(src)?;
             for k in keys {
-                let v = it.get(src, &Key::from_str(&k))?;
-                it.set(&target, &Key::from_str(&k), v)?;
+                let v = it.get(src, &Key::parse(&k))?;
+                it.set(&target, &Key::parse(&k), v)?;
             }
         }
         Ok(target)
     });
     def(it, ctor, "create", 2, |it, _t, args| {
         let proto = arg(&args, 0);
-        let obj = it.object_with(match proto.as_object() {
-            Some(o) => Some(o.clone()),
-            None => None,
-        });
+        let obj = it.object_with(proto.as_object().cloned());
         if let Some(desc) = args.get(1) {
             apply_descriptors(it, &obj, desc)?;
         }
@@ -693,7 +689,7 @@ fn install_object_ctor_statics(it: &mut Interp, ctor: &ObjRef) {
         }
         for (key, list) in groups {
             let arr = it.array(list);
-            it.set(&out, &Key::from_str(&key), arr)?;
+            it.set(&out, &Key::parse(&key), arr)?;
         }
         Ok(out)
     });
@@ -702,8 +698,8 @@ fn install_object_ctor_statics(it: &mut Interp, ctor: &ObjRef) {
 fn apply_descriptors(it: &mut Interp, target: &Value, desc: &Value) -> JsResult<()> {
     let keys = it.own_enumerable(desc)?;
     for k in keys {
-        let d = it.get(desc, &Key::from_str(&k))?;
-        let key = Key::from_str(&k);
+        let d = it.get(desc, &Key::parse(&k))?;
+        let key = Key::parse(&k);
         let value = it.get(&d, &Key::Name(Rc::from("value")))?;
         let enumerable = it.get(&d, &Key::Name(Rc::from("enumerable")))?.to_boolean();
         let writable = it.get(&d, &Key::Name(Rc::from("writable")))?.to_boolean();
@@ -794,6 +790,9 @@ fn install_fn_proto(it: &mut Interp, p: &ObjRef) {
 
 // ---------------------------------------------------------------------- Math
 
+/// A one-argument Math function as JS knows them.
+type MathFn = fn(f64) -> f64;
+
 fn install_math(it: &mut Interp) {
     let m = it.plain_ref();
     let consts: [(&str, f64); 8] = [
@@ -809,7 +808,7 @@ fn install_math(it: &mut Interp) {
     for (n, v) in consts {
         m.borrow_mut().define_internal(n, Value::Number(v));
     }
-    let unary: Vec<(&str, fn(f64) -> f64)> = vec![
+    let unary: Vec<(&str, MathFn)> = vec![
         ("abs", |x| x.abs()),
         ("ceil", |x| x.ceil()),
         ("floor", |x| x.floor()),
@@ -937,7 +936,7 @@ fn install_json(it: &mut Interp) {
         let space = args.get(2).cloned();
         let indent = match space {
             None | Some(Value::Undefined) | Some(Value::Null) => String::new(),
-            Some(Value::Number(n)) => " ".repeat(n.max(0.0).min(10.0) as usize),
+            Some(Value::Number(n)) => " ".repeat(n.clamp(0.0, 10.0) as usize),
             Some(Value::Str(s)) => s.chars().take(10).collect(),
             Some(other) => other.to_string(),
         };

@@ -274,10 +274,7 @@ impl TreeBuilder {
             "p", "dd", "dt", "li", "option", "optgroup", "tbody", "td", "tfoot", "th", "thead",
             "tr",
         ];
-        loop {
-            let Some(top) = self.stack.last().copied() else {
-                break;
-            };
+        while let Some(top) = self.stack.last().copied() {
             if top == self.dom.document() {
                 break;
             }
@@ -383,13 +380,10 @@ impl TreeBuilder {
     }
 
     fn do_doctype(&mut self, name: String, public_id: String, system_id: String) {
-        match self.mode {
-            Mode::Initial => {
-                self.dom.append_doctype(&name, &public_id, &system_id);
-                self.dom.quirks = is_quirks_mode(&name, &public_id, &system_id);
-                self.mode = Mode::BeforeHtml;
-            }
-            _ => {}
+        if self.mode == Mode::Initial {
+            self.dom.append_doctype(&name, &public_id, &system_id);
+            self.dom.quirks = is_quirks_mode(&name, &public_id, &system_id);
+            self.mode = Mode::BeforeHtml;
         }
     }
 
@@ -791,10 +785,8 @@ impl TreeBuilder {
                         self.pop();
                     }
                 }
-                "title" | "style" => {
-                    if self.dom.tag(self.current()) == Some(name) {
-                        self.pop();
-                    }
+                "title" | "style" if self.dom.tag(self.current()) == Some(name) => {
+                    self.pop();
                 }
                 _ => {}
             },

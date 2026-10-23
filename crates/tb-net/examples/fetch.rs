@@ -18,7 +18,7 @@ fn main() -> tb_core::Result<()> {
     if let Some(t) = &r.text {
         println!(
             "first 200 chars: {}",
-            &t.chars().take(200).collect::<String>()
+            t.chars().take(200).collect::<String>()
         );
     }
     Ok(())

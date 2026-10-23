@@ -153,10 +153,7 @@ pub fn date_call(it: &mut Interp, this: Value, args: Vec<Value>) -> JsResult<Val
     let ms = match args.as_slice() {
         [] => it.clock,
         [one] if one.is_number() => one.to_number(),
-        [one] => match parse_date(&it.to_string_val(one)?) {
-            Some(v) => v,
-            None => f64::NAN,
-        },
+        [one] => parse_date(&it.to_string_val(one)?).unwrap_or(f64::NAN),
         many => {
             let y = many.first().map(|v| v.to_number()).unwrap_or(1970.0);
             let mo = many.get(1).map(|v| v.to_number()).unwrap_or(0.0) + 1.0;
@@ -166,7 +163,7 @@ pub fn date_call(it: &mut Interp, this: Value, args: Vec<Value>) -> JsResult<Val
             let s = many.get(5).map(|v| v.to_number()).unwrap_or(0.0);
             let ms = many.get(6).map(|v| v.to_number()).unwrap_or(0.0);
             let days = days_from_civil(y as i64, mo as u32, d as u32);
-            days as f64 * 86400_000.0 + h * 3600_000.0 + mi * 60_000.0 + s * 1000.0 + ms
+            days as f64 * 86_400_000.0 + h * 3_600_000.0 + mi * 60_000.0 + s * 1_000.0 + ms
         }
     };
     if let Some(o) = this.as_object() {
@@ -335,11 +332,11 @@ pub fn install_date(it: &mut Interp, p: &ObjRef, ctor: &Value) {
                 1.0
             };
             let days = days_from_civil(y as i64, mo as u32, d as u32);
-            let extra = arg(&args, 3).to_number() * 3600_000.0
+            let extra = arg(&args, 3).to_number() * 3_600_000.0
                 + arg(&args, 4).to_number() * 60_000.0
-                + arg(&args, 5).to_number() * 1000.0
+                + arg(&args, 5).to_number() * 1_000.0
                 + arg(&args, 6).to_number();
-            Ok(Value::Number(days as f64 * 86400_000.0 + extra))
+            Ok(Value::Number(days as f64 * 86_400_000.0 + extra))
         });
         c.borrow_mut().define_internal("UTC", v);
     }
@@ -786,7 +783,7 @@ pub fn install_promise(it: &mut Interp, p: &ObjRef, ctor: &Value) {
             let mut already = 0usize;
             // count how many entries are plain values: those are known right now
             for (i, v) in items.iter().enumerate() {
-                let promise = v.as_object().map(|o| is_promise(o));
+                let promise = v.as_object().map(is_promise);
                 if promise == Some(true) || v.is_object() && it.is_thenable(v) {
                     continue;
                 }
@@ -984,15 +981,13 @@ pub fn install_console(it: &mut Interp) {
         "clear",
     ] {
         let v = it.native_fn(name, 1, move |it, _t, args| {
-            if name == "assert" {
-                if !arg(&args, 0).to_boolean() {
-                    let msg = if args.len() > 1 {
-                        it.to_string_val(&args[1])?
-                    } else {
-                        "Assertion failed".into()
-                    };
-                    it.log("error", msg);
-                }
+            if name == "assert" && !arg(&args, 0).to_boolean() {
+                let msg = if args.len() > 1 {
+                    it.to_string_val(&args[1])?
+                } else {
+                    "Assertion failed".into()
+                };
+                it.log("error", msg);
             }
             Ok(Value::Undefined)
         });
@@ -1250,7 +1245,7 @@ pub fn parse_float(s: &str) -> f64 {
     let t = s.trim_start();
     let chars: Vec<char> = t.chars().collect();
     let mut end = 0;
-    if matches!(chars.get(0), Some('+') | Some('-')) {
+    if matches!(chars.first(), Some('+') | Some('-')) {
         end = 1;
     }
     let mut dot = false;

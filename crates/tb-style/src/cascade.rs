@@ -554,10 +554,8 @@ fn rule_key(sel: &ComplexSelector) -> Option<Key> {
                     class = Some(Key::Class(c.clone()));
                 }
             }
-            Simple::Type(t) => {
-                if ty.is_none() {
-                    ty = Some(Key::Type(t.clone()));
-                }
+            Simple::Type(t) if ty.is_none() => {
+                ty = Some(Key::Type(t.clone()));
             }
             _ => {}
         }
@@ -723,13 +721,13 @@ fn apply(
         let v = substitute(&c.text(), &lookup);
         if v == "normal" {
             style.letter_spacing = 0.0;
-        } else if let Some(x) = parse_value(&v).parts.first().and_then(|p| len(p)) {
+        } else if let Some(x) = parse_value(&v).parts.first().and_then(&len) {
             style.letter_spacing = x.resolve_zero(0.0);
         }
     }
     if let Some(c) = props.get("word-spacing") {
         let v = substitute(&c.text(), &lookup);
-        if let Some(x) = parse_value(&v).parts.first().and_then(|p| len(p)) {
+        if let Some(x) = parse_value(&v).parts.first().and_then(&len) {
             style.word_spacing = x.resolve_zero(0.0);
         }
     }
@@ -1021,7 +1019,7 @@ fn apply(
             parse_value(&v)
                 .parts
                 .first()
-                .and_then(|p| len(p))
+                .and_then(&len)
                 .unwrap_or(L::Auto)
         };
     }
@@ -1058,7 +1056,7 @@ fn apply(
                             style.flex_basis = parse_value(b)
                                 .parts
                                 .first()
-                                .and_then(|p| len(p))
+                                .and_then(&len)
                                 .unwrap_or(L::Px(0.0))
                         }
                         None => style.flex_basis = L::Px(0.0),
@@ -1099,7 +1097,7 @@ fn apply(
     for name in ["gap", "column-gap", "row-gap"] {
         if let Some(c) = props.get(name) {
             let v = substitute(&c.text(), &lookup);
-            if let Some(x) = parse_value(&v).parts.first().and_then(|p| len(p)) {
+            if let Some(x) = parse_value(&v).parts.first().and_then(&len) {
                 let px = x.resolve_zero(0.0);
                 if name != "column-gap" {
                     style.row_gap = px;

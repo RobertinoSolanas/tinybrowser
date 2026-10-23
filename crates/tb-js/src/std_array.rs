@@ -20,7 +20,7 @@ pub fn array_call(it: &mut Interp, this: Value, args: Vec<Value>) -> JsResult<Va
     }
     if args.len() == 1 {
         if let Value::Number(n) = args[0] {
-            if n == n.trunc() && n >= 0.0 && n <= 20_000_000.0 {
+            if n == n.trunc() && (0.0..=20_000_000.0).contains(&n) {
                 if let Kind::Array { items } = &mut obj.borrow_mut().kind {
                     *items = vec![Value::Undefined; n as usize];
                 }
@@ -148,7 +148,7 @@ pub fn install_array(it: &mut Interp, p: &super::value::ObjRef, ctor: &Value) {
         } else {
             // default sort compares string forms; holes stay at the end
             let mut defined: Vec<Value> = list.into_iter().filter(|v| !v.is_undefined()).collect();
-            defined.sort_by(|a, b| a.to_string().cmp(&b.to_string()));
+            defined.sort_by_key(|a| a.to_string());
             defined
         };
         set_items(it, &this, result);
@@ -166,8 +166,8 @@ pub fn install_array(it: &mut Interp, p: &super::value::ObjRef, ctor: &Value) {
         let v = arg(&args, 0);
         let start = rel_index(&arg(&args, 1), len, 0);
         let end = rel_index(&arg(&args, 2), len, len);
-        for i in start..end.min(len) {
-            list[i] = v.clone();
+        for slot in list[start..end.min(len)].iter_mut() {
+            *slot = v.clone();
         }
         set_items(it, &this, list);
         Ok(this)
@@ -231,7 +231,7 @@ pub fn install_array(it: &mut Interp, p: &super::value::ObjRef, ctor: &Value) {
             v => v.to_number(),
         };
         let mut out = Vec::new();
-        flatten(it, &items(&this), depth as i32, &mut out)?;
+        flatten(&items(&this), depth as i32, &mut out)?;
         Ok(it.array(out))
     });
     def(it, p, "flatMap", 1, |it, this, args| {
@@ -562,14 +562,14 @@ pub fn install_array(it: &mut Interp, p: &super::value::ObjRef, ctor: &Value) {
     }
 }
 
-fn flatten(it: &mut Interp, list: &[Value], depth: i32, out: &mut Vec<Value>) -> JsResult<()> {
+fn flatten(list: &[Value], depth: i32, out: &mut Vec<Value>) -> JsResult<()> {
     for v in list {
         let is_arr = v
             .as_object()
             .map(|o| o.borrow().is_array())
             .unwrap_or(false);
         if is_arr && depth > 0 {
-            flatten(it, &items(v), depth - 1, out)?;
+            flatten(&items(v), depth - 1, out)?;
         } else {
             out.push(v.clone());
         }

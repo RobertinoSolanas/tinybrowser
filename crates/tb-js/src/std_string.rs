@@ -110,7 +110,7 @@ pub fn install_string(it: &mut Interp, p: &super::value::ObjRef) {
         let _ = off;
         match pre.find(&needle) {
             Some(rel) => {
-                let idx = hay[..hay.find(&pre).unwrap_or(0) + 0].chars().count();
+                let idx = hay[..hay.find(&pre).unwrap_or(0)].chars().count();
                 let _ = idx;
                 let chars_before: usize = hay.chars().take(byte_to_char(&hay, from)).count();
                 let _ = chars_before;
@@ -249,43 +249,27 @@ pub fn install_string(it: &mut Interp, p: &super::value::ObjRef) {
     });
     def(it, p, "trim", 0, |_it, this, _args| {
         Ok(Value::string(
-            chars(&this).iter().collect::<String>().trim().to_string(),
+            chars(&this).iter().collect::<String>().trim(),
         ))
     });
     def(it, p, "trimStart", 0, |_it, this, _args| {
         Ok(Value::string(
-            chars(&this)
-                .iter()
-                .collect::<String>()
-                .trim_start()
-                .to_string(),
+            chars(&this).iter().collect::<String>().trim_start(),
         ))
     });
     def(it, p, "trimEnd", 0, |_it, this, _args| {
         Ok(Value::string(
-            chars(&this)
-                .iter()
-                .collect::<String>()
-                .trim_end()
-                .to_string(),
+            chars(&this).iter().collect::<String>().trim_end(),
         ))
     });
     def(it, p, "trimLeft", 0, |_it, this, _args| {
         Ok(Value::string(
-            chars(&this)
-                .iter()
-                .collect::<String>()
-                .trim_start()
-                .to_string(),
+            chars(&this).iter().collect::<String>().trim_start(),
         ))
     });
     def(it, p, "trimRight", 0, |_it, this, _args| {
         Ok(Value::string(
-            chars(&this)
-                .iter()
-                .collect::<String>()
-                .trim_end()
-                .to_string(),
+            chars(&this).iter().collect::<String>().trim_end(),
         ))
     });
     def(it, p, "concat", 1, |it, this, args| {
@@ -427,7 +411,6 @@ pub fn install_string(it: &mut Interp, p: &super::value::ObjRef) {
         let pattern = arg(&args, 0);
         let repl = arg(&args, 1);
         if let Some(re) = regexp_of(&pattern) {
-            let re = re;
             if !re.flags_struct().global {
                 return Err(it.type_error("replaceAll must be called with a global RegExp"));
             }
@@ -786,7 +769,7 @@ fn apply_matches(s: &str, matches: &[super::regexp::MatchInfo], reps: Vec<String
     let chars: Vec<char> = s.chars().collect();
     let mut out = String::new();
     let mut i = 0usize;
-    for (m, rep) in matches.iter().zip(reps.into_iter()) {
+    for (m, rep) in matches.iter().zip(reps) {
         while i < m.start.min(chars.len()) {
             out.push(chars[i]);
             i += 1;

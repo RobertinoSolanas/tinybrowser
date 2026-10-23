@@ -821,15 +821,14 @@ impl Dom {
                     out.push_str(t);
                     return;
                 }
-                NodeKind::Element(e) => {
+                NodeKind::Element(e)
                     if skip_invisible
                         && matches!(
                             e.tag.as_str(),
                             "script" | "style" | "template" | "head" | "title"
-                        )
-                    {
-                        return;
-                    }
+                        ) =>
+                {
+                    return;
                 }
                 _ => {}
             }

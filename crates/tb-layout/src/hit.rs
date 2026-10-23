@@ -40,7 +40,7 @@ pub fn hit_test(doc: &Document, dom: &Dom, x: f32, y: f32) -> Option<Hit> {
     })
 }
 
-fn walk<'a>(box_: &'a LayoutBox, p: Point) -> Option<(NodeId, Rect, Option<String>)> {
+fn walk(box_: &LayoutBox, p: Point) -> Option<(NodeId, Rect, Option<String>)> {
     if box_.style.display == tb_style::Display::None {
         return None;
     }
@@ -71,11 +71,9 @@ fn walk<'a>(box_: &'a LayoutBox, p: Point) -> Option<(NodeId, Rect, Option<Strin
     }
     // finally ourselves
     let bb = box_.border_box();
-    if !box_.inline_flow {
-        if bb.contains(p) {
-            if let Some(node) = box_.node {
-                return Some((node, bb, None));
-            }
+    if !box_.inline_flow && bb.contains(p) {
+        if let Some(node) = box_.node {
+            return Some((node, bb, None));
         }
     }
     None

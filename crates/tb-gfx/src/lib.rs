@@ -30,7 +30,7 @@ pub mod framebuffer;
 pub mod png;
 
 pub use draw::{BoxPaint, TextPaint};
-pub use font::{metrics, Font};
+pub use font::{metrics, Font, TextRun};
 pub use framebuffer::{Dash, Framebuffer};
 pub use png::{decode as png_decode, encode as png_encode, PNG_SIGNATURE};
 

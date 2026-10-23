@@ -240,9 +240,9 @@ impl Url {
             u.fragment = Some(hash.to_string());
             return Ok(u);
         }
-        if s.starts_with('?') {
+        if let Some(q) = s.strip_prefix('?') {
             let mut u = base.clone();
-            u.query = Some(s[1..].to_string());
+            u.query = Some(q.to_string());
             u.fragment = None;
             return Ok(u);
         }

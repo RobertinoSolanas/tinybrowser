@@ -32,6 +32,6 @@ fn main() {
     println!(
         "visible text: {} chars, begins: {}",
         collapsed.chars().count(),
-        &collapsed.chars().take(160).collect::<String>()
+        collapsed.chars().take(160).collect::<String>()
     );
 }

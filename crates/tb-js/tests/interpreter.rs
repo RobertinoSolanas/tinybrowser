@@ -44,7 +44,7 @@ fn arithmetic_and_precedence() {
     assert_eq!(num("7 / 2"), 3.5);
     assert_eq!(out("1 / 0"), "Infinity");
     assert_eq!(out("0 / 0"), "NaN");
-    assert!(num("'5' - 2").is_nan() == false);
+    assert!(!num("'5' - 2").is_nan());
     assert_eq!(num("'5' - 2"), 3.0);
     assert_eq!(out("'5' + 2"), "52", "+ prefers strings");
     assert_eq!(out("1 + 1 + '1'"), "21");
@@ -779,7 +779,7 @@ fn math_and_conversions() {
     assert_eq!(num("parseInt('42px')"), 42.0);
     assert_eq!(num("parseInt('ff', 16)"), 255.0);
     assert!(num("parseInt('abc')").is_nan());
-    assert_eq!(num("parseFloat('3.14 and more')"), 3.14);
+    assert_eq!(num("parseFloat('3.14 and more')"), 314.0 / 100.0);
     assert!(ok("Number.isInteger(3)"));
     assert!(!ok("Number.isInteger(3.5)"));
     assert!(ok("Number.isNaN(NaN)"));

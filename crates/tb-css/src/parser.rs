@@ -519,13 +519,12 @@ impl<'a> Parser<'a> {
             }
             // at-rules whose body is normal CSS
             "layer" | "scope" | "container" | "document" | "-moz-document" => {
-                let rules = if self.peek() == Some('{') {
+                if self.peek() == Some('{') {
                     self.i += 1;
                     self.parse_rules()
                 } else {
                     Vec::new()
-                };
-                rules
+                }
             }
             // everything else (including `@scsssope`, `@include`, `@apply`)
             _ => {
@@ -580,7 +579,7 @@ mod tests {
         assert_eq!(decls("a { margin: 1px 2% 3em }")[0].1, "1px 2% 3em");
         assert_eq!(decls("a { color: #fff }")[0].1, "#ffffff");
         assert_eq!(decls("a { content: \"a, b\" }")[0].1, "\"a, b\"");
-        assert_eq!(decls("a { color: red !important }")[0].2, true);
+        assert!(decls("a { color: red !important }")[0].2);
     }
 
     #[test]

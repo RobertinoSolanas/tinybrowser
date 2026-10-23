@@ -331,9 +331,13 @@ const DS_MARK: &str = "@@ds:";
 
 /// Bring one `dataset` mirror and the `data-*` attributes back in agreement.
 /// Returns `true` when an attribute changed.
+/// What a `dataset` mirror holds: its own keys, and the `@@ds:` markers that
+/// say which side wrote them last.
+type Mirrors = (Vec<(String, Value)>, Vec<(String, Value)>);
+
 pub fn sync_dataset(dom: &mut Dom, id: NodeId, obj: &ObjRef) -> bool {
     // What the page sees right now, and what we last agreed on.
-    let (props, marks): (Vec<(String, Value)>, Vec<(String, Value)>) = {
+    let (props, marks): Mirrors = {
         let b = obj.borrow();
         let mut props = Vec::new();
         let mut marks = Vec::new();

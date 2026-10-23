@@ -140,8 +140,10 @@ mod tests {
 
     #[test]
     fn pixel_size_uses_scale() {
-        let mut c = EngineConfig::default();
-        c.scale = 2.0;
+        let c = EngineConfig {
+            scale: 2.0,
+            ..Default::default()
+        };
         assert_eq!(c.pixel_size().width, 2560.0);
     }
 }

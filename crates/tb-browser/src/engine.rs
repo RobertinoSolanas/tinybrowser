@@ -203,7 +203,7 @@ impl Engine {
     /// `fetch()` from Rust: raw bytes + status, no pipeline.
     pub fn fetch(&self, url: &Url) -> Result<tb_net::FetchResult> {
         let Some(client) = &self.client else {
-            return Err(TbError::Unsupported("no network in this instance".into()));
+            return Err(TbError::Unsupported("no network in this instance"));
         };
         client.fetch(url)
     }
@@ -218,8 +218,10 @@ impl Engine {
                 return Err(e);
             }
         };
-        let mut timings = Timings::default();
-        timings.fetch = started.elapsed().as_secs_f64() * 1000.0;
+        let timings = Timings {
+            fetch: started.elapsed().as_secs_f64() * 1000.0,
+            ..Default::default()
+        };
         self.process(fetched.0, fetched.1, fetched.2, fetched.3, timings)
     }
 

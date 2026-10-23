@@ -297,8 +297,10 @@ fn the_subresource_budget_is_honoured() {
     }
     let url = server.url("/");
 
-    let mut config = EngineConfig::default();
-    config.max_subresources = 3;
+    let config = EngineConfig {
+        max_subresources: 3,
+        ..Default::default()
+    };
     let mut engine = Engine::new(config);
     let page = engine.load(&url).unwrap();
     let css_hits = server

@@ -690,7 +690,7 @@ fn selected_index(dom: &tb_dom::Dom, id: NodeId) -> usize {
         .collect();
     opts.iter()
         .position(|o| dom.has_attr(*o, "selected"))
-        .unwrap_or(if opts.is_empty() { 0 } else { 0 })
+        .unwrap_or(0)
 }
 
 /// What a click does when no listener cancelled it: a checkbox or radio button

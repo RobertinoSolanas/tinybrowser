@@ -1,0 +1,69 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+env:
+  CARGO_TERM_COLOR: always
+  # one crate layer down: our own engine has no network dependencies to flake on
+  RUST_BACKTRACE: 1
+
+jobs:
+  test:
+    name: fmt · clippy · test · junit
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Format
+        run: cargo fmt --all --check
+
+      - name: Clippy (warning-free)
+        run: cargo clippy --workspace --all-targets -- -D warnings
+
+      - name: Build
+        run: cargo build --workspace --all-targets
+
+      # 538 tests, no network: fixtures + tb-testkit. The live taz.de test is
+      # #[ignore]d — a third-party page is not a fixture.
+      - name: Test
+        run: cargo test --workspace
+
+      - name: JUnit report
+        if: always()
+        run: cargo junit
+
+      - name: Upload JUnit
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: junit
+          path: target/junit.xml
+          retention-days: 14
+
+  release:
+    name: release build (tiny)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Build release CLI
+        run: cargo build --release -p tb-cli
+      - name: Smoke — parse, style, layout, script a snapshot offline
+        run: |
+          ./target/release/tiny --no-net --no-js --verbose fixtures/taz.de.html
+          ./target/release/tiny --no-net --text fixtures/taz.de.html | head -5
+      - name: Upload binary
+        uses: actions/upload-artifact@v4
+        with:
+          name: tiny-linux
+          path: target/release/tiny

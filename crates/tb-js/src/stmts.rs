@@ -128,7 +128,7 @@ impl Interp {
             js::Pattern::Object(els) => {
                 for e in els {
                     match &e.pattern {
-                        js::Pattern::Binding(n) if e.rest || &**n != "" => {
+                        js::Pattern::Binding(n) if e.rest || !(**n).is_empty() => {
                             target
                                 .borrow_mut()
                                 .vars
@@ -539,10 +539,7 @@ impl Interp {
                 Ok(())
             }
             js::Pattern::Array(els) => {
-                let items = match self.iterate(value) {
-                    Ok(v) => v,
-                    Err(_) => Vec::new(),
-                };
+                let items = self.iterate(value).unwrap_or_default();
                 let mut i = 0usize;
                 for e in els {
                     match e {
@@ -586,9 +583,9 @@ impl Interp {
                             if used.contains(&k) {
                                 continue;
                             }
-                            let v = self.get(value, &Key::from_str(&k))?;
+                            let v = self.get(value, &Key::parse(&k))?;
                             rest.props
-                                .push((Key::from_str(&k), super::value::Prop::data(v)));
+                                .push((Key::parse(&k), super::value::Prop::data(v)));
                         }
                         if let js::Pattern::Binding(n) = &e.pattern {
                             if lexical {

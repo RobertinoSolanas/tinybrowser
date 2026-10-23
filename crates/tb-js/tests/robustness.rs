@@ -128,8 +128,9 @@ fn random_scripts_never_panic() {
         let n = 1 + (rng.next() % 24) as usize;
         let mut src = String::new();
         for _ in 0..n {
-            // `frags` is `&[&str]`, so `pick` hands back a `&&str`
-            src.push_str(*rng.pick(frags));
+            // `frags` is `&[&str]`: the turbofish says which element type we
+            // want, so `pick` hands back `&str` and not `&&str`
+            src.push_str(rng.pick::<&str>(frags));
             if rng.next() % 4 == 0 {
                 src.push(' ');
             }

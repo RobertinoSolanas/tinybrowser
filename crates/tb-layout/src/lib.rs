@@ -100,7 +100,7 @@ impl block::Document {
     }
 }
 
-pub fn find_box<'a>(root: &'a LayoutBox, node: NodeId) -> Option<&'a LayoutBox> {
+pub fn find_box(root: &LayoutBox, node: NodeId) -> Option<&LayoutBox> {
     if root.node == Some(node) {
         return Some(root);
     }
@@ -112,7 +112,7 @@ pub fn find_box<'a>(root: &'a LayoutBox, node: NodeId) -> Option<&'a LayoutBox> 
     None
 }
 
-pub fn find_box_mut<'a>(root: &'a mut LayoutBox, node: NodeId) -> Option<&'a mut LayoutBox> {
+pub fn find_box_mut(root: &mut LayoutBox, node: NodeId) -> Option<&mut LayoutBox> {
     if root.node == Some(node) {
         return Some(root);
     }

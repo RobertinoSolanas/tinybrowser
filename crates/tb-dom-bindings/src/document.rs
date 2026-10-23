@@ -81,7 +81,7 @@ pub fn install(it: &mut Interp, host: &HostRef, proto: &ObjRef) {
     });
     ro_prop(it, host, proto, "head", |it, h, _id| {
         let _ = it;
-        let head = html_root(h).and_then(|r| Some(ensure_child(h, r, "head")));
+        let head = html_root(h).map(|r| ensure_child(h, r, "head"));
         Ok(maybe_wrap(h, head))
     });
     rw_prop(

@@ -31,11 +31,12 @@ falsche Art von "tiny".
 Der detaillierte Fortschritt steht in [`todolist.md`](todolist.md) (jede Aufgabe
 wird beim Fertigstellen abgehakt).
 
-**Was jetzt schon läuft** (Phase 0–7, ohne CLI):
+**Was jetzt schon läuft** (Phase 0–9, inkl. CLI):
 
 ```console
 $ cargo test --workspace 2>&1 | grep 'test result' | awk '{s+=$4} END {print s" Tests, 0 Fehler"}'
-400 Tests, 0 Fehler
+538 Tests, 0 Fehler
+$ cargo clippy --workspace --all-targets -- -D warnings   # warning-free
 ```
 
 Die JavaScript-Engine läuft schon in sich geschlossen — Konsolen-Ersatz:
@@ -300,11 +301,33 @@ inkl. `stretch`, row-/column-gap), `position: absolute|fixed|relative|sticky`
 (`min-content`/`max-content`/`fit-content`), `overflow`-Achsen bei der
 Scrollhöhe, Hit-Test (`element_at`, `elementFromPoint`, `link_at`).
 
+**Browser-Layer (✅ fertig):** `window` mit `location`/`history`/`navigator`/
+`screen`/`performance`/`localStorage`/`sessionStorage`, `document`
+(`getElementById`, `querySelector(All)`, `createElement`, `createTextNode`,
+`write`, `DOMParser`, `cookie`, `readyState`, `documentElement`, `title`),
+`Node`/`Element`/`HTMLElement` inkl. `dataset`, `classList`, `style`,
+`insertAdjacentHTML`, `cloneNode`, `replaceChildren`, `matches`/`closest`,
+`getBoundingClientRect`, Event-System (Bubbling/Capturing, `preventDefault`,
+`stopPropagation`, `CustomEvent`, `MouseEvent`, `KeyboardEvent`), Forms
+(`value`, `checked`, `FormData`-Reste, Submit als Navigationswunsch), Timer,
+`fetch` gegen den `ResourceLoader`, `alert/scrollTo/matchMedia/getComputedStyle`,
+`<script>`-Verarbeitung (inline + `src` in Dokumentreihenfolge, `defer`/`async`
+als Dokument-Reihenfolge, fremde Skripte tolerant geparst), `NavRequest`s
+(`location.href`, `form.submit()`, Anchor-Klick) und `History` mit
+`back()/forward()`/`pushState`.
+
 **Grenzen (bewusst):** kein CSS-Grid (taz nutzt keins), keine Bilddekodierung —
 `<img>` bekommt CSS-Maße, `width`/`height`-Attribute und Aspect-Ratio, sonst
 300×150; keine Web Fonts (font-family → Bitmap-Font, 5×7), keine
 richtungsabhängige Typografie (RTL), kein Tabellen-/`order`-Layout, keine echte
 parallele Skriptausführung, TLS = Fremdcrate.
+
+**Bewusst nicht gemodelt:** `IntersectionObserver`/`ResizeObserver`/
+`MutationObserver` (existieren als leere Konstruktoren, damit Skripte nicht
+dran sterben), `canvas` (der Teich wird gemalt, aber 2D-API ist nicht da),
+ES-Module (`type="module"` wird als Problem gemeldet), Shadow DOM, Frames und
+Popup-Fenster (`Window` ist die Seite, nicht ein Frame-Tree), WebGL, Audio,
+Service Worker, DevTools.
 
 ---
 
@@ -448,28 +471,117 @@ kein `serde_json`.
 
 ## 6. Abnahmetest: taz.de
 
-Der Test läuft in zwei Varianten:
+Zwei Varianten, beide committed:
 
-* `taz_snapshot_loads_correctly` — `fixtures/taz.de.html` (committed, offline,
-  deterministisch).
-* `taz_de_loads_correctly` — echter HTTP-Request gegen `https://taz.de`
-  (fallen gelassen auf den Snapshot, wenn gerade kein Netz verfügbar ist; dann
-  mit Warnung, damit der Grund sichtbar bleibt).
+* **`crates/tb-browser/tests/taz_de.rs`** — `fixtures/taz.de.html` (422 KB
+  Snapshot) gegen `tb-testkit`, also mit *echten* HTTP-Antworten für die drei
+  taz-Stylesheets. Offline, deterministisch, läuft bei jedem `cargo test`.
+* **`crates/tb-browser/tests/taz_live.rs`** — echter Request gegen
+  `https://taz.de`. `#[ignore]`d (Netz ist kein Testfixture), explizit:
 
-Prüfungen (Auszug):
+  ```console
+  $ cargo test -p tb-browser --test taz_live -- --ignored --nocapture
+  taz.de: 2796 elements, 260 links, 2589 rules, 3284 boxes, 1435 ms
+  ```
 
-* HTTP 200, `Content-Type: text/html`, Charset `utf-8`
-* `document.title == "taz.de | taz.de"`, `<html lang="de">`
-* > 2000 Elemente, > 150 Links (`href` absolut aufgelöst), > 100 Bilder
-* Stylesheets werden geladen und angewendet (`ComputedStyle` von `body`, `h1`, `a`)
-* Layout: Dokumenthöhe > Viewport, erste Boxes mit positiver Breite
-* Screenshot: PNG-Signatur korrekt, nicht-weiße Pixel vorhanden
-* Keine Panics; nur *bekannte* Problem-Kategorien (z. B. Fremd-Skripte, die
-  unsere Engine bewusst ablehnt)
+Prüfungen (beide Varianten): HTTP 200, `text/html; charset=utf-8`, Redirect auf
+die finale URL, `document.title == "taz.de | taz.de"`, > 2000 Elemente, > 150
+Links (alle absolut — ein Fragment-Link ist `https://taz.de/#hauptnavigation`,
+`mailto:` behält sein Schema), Stylesheets geladen **und** angewendet
+(> 50 % der Elemente gematcht), Layout-Höhe > Viewport, Screenshot mit Tinte
+(> 20 000 Nicht-Weiß-Pixel), NaN-freie Geometrie, und die Skripte der Seite
+nehmen die Seite nicht mit.
+
+Live-Ergebnis (Release-Build, 2026-07):
+
+```console
+$ cargo run --release -p tb-cli -- --verbose --screenshot /tmp/taz.png https://taz.de
+→ https://taz.de/  (200 text/html; charset=utf-8, 408938 bytes, 96 ms)
+title:    taz.de | taz.de
+elements: 2796   nodes: 7771   links: 260   images: 155   scripts: 32
+css:      15 sheets, 2589 rules, 2795 elements matched   boxes: 3284
+js:       19 run, 11 skipped, 4 failed   console: 7   problems: 17
+pipeline:   fetch 96 ms · parse 3 ms · style 381 ms · layout 2 ms · script 468 ms · render 12 ms
+```
+
+Die 4 Skript-Fehler sind Fremd-Skripte (Consent-Wrapper, Doubleclick-Tag,
+Analytics), die ohne ihre Umgebung laufen — `type="module"` wird als Problem
+gemeldet, nicht als Ausnahme. Eine Seite, die nicht perfekt läuft, soll
+erklärbar bleiben: `--problems` listet sie.
+
+Der Snapshot-Lauf ist der *regressionsdichte* Teil: 2895 Elemente, 262 Links,
+3309 Boxen, Screenshot mit Tinte — in < 1 s Debug-Zeit, ohne Netz.
+
+## 7. Bauen, Testen, CI
+
+```bash
+cargo build --release                        # alles
+cargo test --workspace                       # 538 Tests, 45 Suiten
+cargo test -p tb-browser --test taz_live -- --ignored   # Live-Test (Netz nötig)
+cargo clippy --workspace --all-targets -- -D warnings   # muss warnungsfrei sein
+cargo fmt --all --check
+cargo junit                                  # target/junit.xml (CI-Artefakt)
+cargo run    -p tb-cli --release -- --serve fixtures    # Demo-Seite lokal ausliefern
+```
+
+`cargo junit` (der `xtask`) läuft jedes Package einzeln und schreibt eine
+`<testsuite>` pro Test-Target in `target/junit.xml` — inklusive Stdout des
+Falls, `<skipped/>` für `#[ignore]` und dem Exit-Code des Laufs.
+
+**Toolchain-Hinweis:** `cargo clippy` muss mit demselben `rustc` laufen wie
+`cargo build`. Auf Maschinen mit System-Rust *und* `rustup` kann `clippy-driver`
+von einer anderen Version stammen (`E0514: found crate … compiled by an
+incompatible version of rustc`); dann hilft `PATH="$HOME/.cargo/bin:$PATH"`.
+
+Der CI-Workflow (`.github/workflows/ci.yml`) macht genau diese vier Schritte —
+fmt, clippy (`-D warnings`), Test, JUnit-Artefakt — und einen Release-Build der
+CLI; der Live-Test läuft dort nicht (kein Netz in CI, und eine fremde Seite ist
+kein Fixture).
 
 ---
 
-## 7. Workspace
+## 8. Glossar (Ubiquitous Language)
+
+Die Sprache des Codes ist die des Browsers, nicht die der Bibliotheken. Ein
+paar Begriffe, weil sie in allen Crates gleich bedeuten:
+
+| Begriff | Bedeutung im Code | Typ |
+|---|---|---|
+| **Problem** | alles, was schiefgehen darf, ohne die Seite zu stoppen: Parse-Fehler, fehlendes Subresource, Skript-Ausnahme. Wird gesammelt, nie geworfen | `tb_core::Problems`, `Problem` |
+| **Fehler** (`TbError`) | alles, was den Vorgang abbricht (DNS, TLS, zu große Antwort, Policy) | `tb_core::TbError` + `Phase` |
+| **Page** | das Aggregat einer geladenen Dokumentinstanz: URL, Status, DOM, Stylesheets, Box-Baum, Probleme, Timings, JS-Host. Alles, was der Nutzer „die Seite“ nennt | `tb_browser::Page` |
+| **Document / Node** | der reine Strukturbaum ohne Presentation, ohne Skripte | `tb_dom::Dom`, `NodeId` |
+| **Wrapper** | das JS-Objekt, das auf einen DOM-Knoten zeigt (`@@node` = `idx:gen`-Handle); Identität wird gecacht, Verhalten sitzt am Prototype | `tb_dom_bindings` |
+| **Host** | der Binding-Zustand einer Seite: Interpreter ↔ DOM, Timer, Events, Storage, Navigationswünsche. Eine `Rc<RefCell<Host>>`, die **nie** gehalten wird, während JS läuft | `tb_dom_bindings::Host` |
+| **Box** | das Ergebnis von Layout: ein Rechteck in Dokumentkoordinaten mit Kind-Boxen — nicht dasselbe wie ein Element | `tb_layout::LayoutBox` |
+| **ComputedStyle** | was nach Kaskade und Vererbung übrig ist, in auflösbarer Form (`L::Linear{pct, fixed}`) | `tb_style::ComputedStyle` |
+| **NavRequest** | ein *Wunsch* zu navigieren (`location.href`, Formular, Linksklick). Der Embedder entscheidet und führt aus | `tb_browser::NavRequest` |
+| **ResourceLoader** | die „Repository“ für Subresources: URL → bytes, mit Basis-URL, Budget, Dedupe, Hooks für Tests | `tb_browser::ResourceLoader` |
+| **Navigation (Aggregate)** | der Vorgang mit Zustand (`NavState`: `Idle → Fetching → Parsed → Styled → LaidOut → Scripted → Rendered/Failed`) und Historie | `tb_browser::Engine`, `History` |
+
+**DDD-Bausteine, benannt wie sie sind**
+
+* **Value Objects:** `Rect`, `Size`, `Sides`, `Color`, `Url`, `L`, `ComputedStyle`
+  — verglichen nach Werten, keine Identität.
+* **Entity:** `NodeId` (Arena-Handle mit Generation — ein `NodeId` ist auch nach
+  `remove()` noch derselbe Knoten, und ein toter Handle zeigt nie auf einen
+  neuen), `Page` (identisch über alle Mutationen hinweg dieselbe Seite).
+* **Aggregate:** `Page` ist die Wurzel; niemand außer `tb-browser` fasst DOM,
+  Style, Layout und Skript gleichzeitig an. `Document`/`StyleSheet` sind
+  Aggregate der jeweiligen Contexte.
+* **Domain Services (zustandslos):** `tb_html::parse`, `tb_css::parse_stylesheet`,
+  `tb_style::compute`, `tb_layout::layout`, `tb_gfx::paint_placeholder`.
+* **Application Service:** `Engine::process` (Pipeline) und `Page::sync_after_js`
+  (nach Skripten neu stylen/layen).
+* **Anti-Corruption Layers:** `tb-dom-bindings` (JS-Welt ↔ DOM-Welt, Handles,
+  Mirror-Sync) und `tb-browser` (Kenntnis aller Contexte, nach außen nur `Page`).
+* **Ubiquitous Language in den Tests:** Test-Namen sagen Browser-Dinge
+  (`anchor_click_navigates_and_back_returns`, `a_script_that_lies_about_the_dom_
+  still_gets_measured`), nicht Implementierungsdetails.
+
+---
+
+## 9. Workspace
 
 ```
 Cargo.toml                 Workspace, nur rustls + webpki-roots als Dependencies
@@ -494,6 +606,6 @@ fixtures/                  taz.de.html, die drei echten Stylesheets und
                            js/taz-inline.js (Offline-Tests + JS-Benchmark)
 ```
 
-## 8. Lizenz
+## 10. Lizenz
 
 MIT or Apache-2.0.

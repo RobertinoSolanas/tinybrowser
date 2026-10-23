@@ -118,12 +118,11 @@ pub fn parse_http_date(s: &str) -> Option<i64> {
     let day: i64 = it.next()?.parse().ok()?;
     let month = it.next()?.to_ascii_lowercase();
     let year: i64 = it.next()?.parse().ok()?;
-    let year = if year < 70 {
-        year + 2000
-    } else if year < 1000 {
-        year
-    } else {
-        year
+    // two-digit years are windowed (RFC 6265): 70–99 is 19xx, 0–69 is 20xx
+    let year = match year {
+        0..=69 => year + 2000,
+        70..=99 => year + 1900,
+        _ => year,
     };
     let month = match month.get(..3)? {
         "jan" => 1,

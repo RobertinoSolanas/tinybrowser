@@ -69,10 +69,7 @@ pub fn matches_selector(dom: &Dom, state: &MatchState, node: NodeId, sel: &str) 
 /// `element.closest(sel)` — self, then parents, nearest first.
 pub fn closest(dom: &Dom, state: &MatchState, node: NodeId, sel: &str) -> Option<NodeId> {
     let list = selector_list(sel);
-    for a in dom.ancestors(node, true) {
-        if dom.tag(a).is_some() && list.iter().any(|s| matches(dom, a, s, state)) {
-            return Some(a);
-        }
-    }
-    None
+    dom.ancestors(node, true)
+        .into_iter()
+        .find(|&a| dom.tag(a).is_some() && list.iter().any(|s| matches(dom, a, s, state)))
 }

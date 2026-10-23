@@ -305,16 +305,53 @@ Legende: `[ ]` = offen, `[x]` = DONE, `[~]` = teilweise / später verfeinert.
 
 ## 10. Abnahme: taz.de
 
-- [ ] **T10.1** Fixture: `fixtures/taz.de.html` (Snapshot) + Offline-Test `taz_snapshot_loads`
-- [ ] **T10.2** Live-Test `taz_de_loads_correctly`: HTTP 200, `text/html`, utf-8,
+- [x] **T10.1** Fixture: `fixtures/taz.de.html` (Snapshot) + Offline-Test `taz_snapshot_loads`
+      — committed (422 KB) samt `fixtures/taz-main.css`, `taz-header.css`,
+      `taz-print.css` und `fixtures/js/taz-inline.js`; `tests/taz_de.rs` serviert
+      alles über `tb-testkit` (echtes HTTP, deterministisch): 2895 Elemente, 262
+      Links, 3309 Boxen, Screenshot mit Tinte, < 1 s Debug-Zeit
+- [x] **T10.2** Live-Test `taz_de_loads_correctly`: HTTP 200, `text/html`, utf-8,
       `Document::title == "taz.de | taz.de"`, > 300 Elemente, > 150 Links (absolut),
       CSS-Regeln > 0, Layout-Höhe > Viewport, Screenshot enthält Text-Pixel
-- [ ] **T10.3** `cargo run -- https://taz.de` liefert Artikel-Text + Linkliste
-- [ ] **T10.4** Doku im README aktualisieren (Ergebnisse, Grenzen, Benchmarks)
+      — `tests/taz_live.rs` (3 Tests, `#[ignore]`d, Netz ist kein Fixture):
+      `cargo test -p tb-browser --test taz_live -- --ignored`.
+      Aktuell: 200, utf-8, Redirect auf `/`, 2796 Elemente, 260 Links (alle
+      absolut — Fragment-Links inklusive Schema, `mailto:` bleibt `mailto:`),
+      2589 Regeln, 3284 Boxen, Screenshot > 20 000 Nicht-Weiß-Pixel.
+      Zwei Nebenbefunde dabei gefixt: `Page::links()` löst jetzt wie `a.href` auf
+      (Fragment mit) und trimmt Whitespace im Attribut
+- [x] **T10.3** `cargo run -- https://taz.de` liefert Artikel-Text + Linkliste
+      — `cargo run --release -- --text https://taz.de` (lesbarer Text ohne
+      `script`/`style`/`display:none`) und `--links` (Liste, absolut);
+      bare URL gibt die Zusammenfassung, `--verbose` die Pipeline-Zeiten
+- [x] **T10.4** Doku im README aktualisieren (Ergebnisse, Grenzen, Benchmarks)
 
 ## 11. Feinschliff
 
-- [ ] **T11.1** `cargo clippy` sauber (Warning-free on our crates), `cargo fmt`
-- [ ] **T11.2** CI-Workflow (`.github/workflows/ci.yml`) mit `cargo test` + JUnit-Artefakt
-- [ ] **T11.3** README final: Architektur, Bounded Contexts, Glossar (DDD),
+- [x] **T11.1** `cargo clippy` sauber (Warning-free on our crates), `cargo fmt`
+      — `cargo clippy --workspace --all-targets` = **0 Warnungen** (98 → 0).
+      autoclap-fix + von Hand; dabei zwei echte Fehler geworden:
+      `Cookie`-Jahre wurden nie auf 19xx gehoben (`70..=99 → +1900` fehlt,
+      RFC 6265), und `Key::from_str` heißt jetzt `Key::parse`
+      (`wrong_self_convention`/`FromStr`-Verwechslung).
+      Neue, klarere Typen statt Parameterlisten: `tb_gfx::TextRun`,
+      `tb_layout::ForcedSize`, `tb_browser::FetchFn`, `Value: Display`
+      (statt inherent `to_string`).
+      Hinweis: clippy muss mit demselben rustc wie cargo laufen —
+      auf System-Rust + rustup-Maschinen `PATH="$HOME/.cargo/bin:$PATH"`
+- [x] **T11.2** CI-Workflow (`.github/workflows/ci.yml`) mit `cargo test` + JUnit-Artefakt
+      — Job 1: `fmt --check`, `clippy -- -D warnings`, build, `cargo test --workspace`,
+      `cargo junit` + Artefakt (auch bei Fehlschlag);
+      Job 2: Release-Build von `tiny` + Offline-Smoke am taz-Snapshot
+      (`--no-net --no-js --verbose`), Binary als Artefakt.
+      Der Live-Test läuft in CI nicht — `#[ignore]`, und eine fremde Seite ist
+      kein Fixture
+- [x] **T11.3** README final: Architektur, Bounded Contexts, Glossar (DDD),
       Build/Run/Test-Anleitung, Support-Matrix, bekannte Grenzen
+      — neu: §7 „Bauen, Testen, CI“ (inkl. Toolchain-Hinweis und `cargo junit`),
+      §8 „Glossar (Ubiquitous Language)“ mit Problem/Fehler, Page/Document,
+      Wrapper/Host, Box/ComputedStyle, NavRequest, ResourceLoader und den
+      DDD-Bausteinen (Value Object, Entity, Aggregate, Domain Service, ACL);
+      §5 Support-Matrix um den Browser-Layer und „bewusst nicht gemodelt“
+      (Observer, canvas, Module, Shadow DOM, Frames) ergänzt; §6 Abnahme mit
+      frischen Live-Zahlen

@@ -107,7 +107,8 @@ pub fn declare(env: &EnvRef, name: &str, value: Value) {
 /// (`let i` in a `for` header, see `Interp::exec`.)
 pub fn fork(src: &EnvRef) -> EnvRef {
     let src_b = src.borrow();
-    let out = Rc::new(RefCell::new(Env {
+
+    Rc::new(RefCell::new(Env {
         kind: ScopeKind::Block,
         vars: src_b.vars.clone(),
         parent: src_b.parent.clone(),
@@ -117,8 +118,7 @@ pub fn fork(src: &EnvRef) -> EnvRef {
         is_async: src_b.is_async,
         derived_constructor: src_b.derived_constructor,
         class_fields: src_b.class_fields.clone(),
-    }));
-    out
+    }))
 }
 
 /// Copy the values of `from`'s own bindings back into `dst` — after a loop body

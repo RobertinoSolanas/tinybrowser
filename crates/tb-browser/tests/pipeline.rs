@@ -102,7 +102,7 @@ fn links_are_resolved_against_the_page() {
     let base = url.rsplit_once('/').unwrap().0;
     assert!(urls.contains(&"https://example.com/ext"), "{urls:?}");
     assert!(
-        urls.iter().any(|u| *u == "file:///first"),
+        urls.contains(&"file:///first"),
         "root relative resolves against the origin: {urls:?}"
     );
     assert!(

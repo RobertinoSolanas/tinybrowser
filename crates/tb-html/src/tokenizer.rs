@@ -596,7 +596,7 @@ impl Tokenizer {
                         self.state = State::Data;
                         return self.emit_doctype();
                     }
-                    Some(c) if matches!(c, ' ' | '\t' | '\n' | '\u{c}') => self.pos += 1,
+                    Some(' ' | '\t' | '\n' | '\u{c}') => self.pos += 1,
                     Some(_) => self.state = State::DoctypeName,
                 },
                 State::DoctypeName => {

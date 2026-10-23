@@ -215,7 +215,9 @@ pub fn hook(me: &SharedLoader) -> impl FnMut(&str) -> Option<String> {
 
 /// `(status, body)` for `window.fetch`. The loader borrow ends before the body
 /// is handed back: the caller is about to run JavaScript.
-pub fn fetch_hook(me: &SharedLoader) -> Box<dyn Fn(&str) -> Option<(u16, String)>> {
+pub type FetchFn = Box<dyn Fn(&str) -> Option<(u16, String)>>;
+
+pub fn fetch_hook(me: &SharedLoader) -> FetchFn {
     let me = me.clone();
     Box::new(move |href: &str| {
         let mut l = me.borrow_mut();

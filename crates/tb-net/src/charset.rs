@@ -80,7 +80,8 @@ fn cp1252(b: u8) -> char {
     if b < 0x80 {
         return b as char;
     }
-    let extra = match b {
+
+    match b {
         0x80 => '\u{20ac}',
         0x82 => '\u{201a}',
         0x83 => '\u{0192}',
@@ -108,9 +109,8 @@ fn cp1252(b: u8) -> char {
         0x9c => '\u{0153}',
         0x9e => '\u{017e}',
         0x9f => '\u{0178}',
-        _ => return b as char,
-    };
-    extra
+        _ => b as char,
+    }
 }
 
 /// `true` when the first 1024 bytes are ASCII (an ASCII compatible prefix
@@ -163,7 +163,7 @@ fn extract_charset(tag: &str) -> Option<String> {
     let rest = rest.strip_prefix('=')?.trim_start();
     let rest = rest.strip_prefix(['\'', '"']).unwrap_or(rest);
     let end = rest
-        .find(|c| matches!(c, '\'' | '"' | ';' | ' ' | '>' | '\t' | '\n'))
+        .find(['\'', '"', ';', ' ', '>', '\t', '\n'])
         .unwrap_or(rest.len());
     Some(rest[..end].to_string())
 }

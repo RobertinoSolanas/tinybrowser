@@ -108,11 +108,10 @@ impl TbError {
 
     /// `true` when a page can still be shown although this error happened.
     pub fn is_recoverable(&self) -> bool {
-        match self {
-            TbError::Parse { .. } | TbError::Unsupported(_) => true,
-            TbError::Script(_) => true,
-            _ => false,
-        }
+        matches!(
+            self,
+            TbError::Parse { .. } | TbError::Unsupported(_) | TbError::Script(_)
+        )
     }
 }
 

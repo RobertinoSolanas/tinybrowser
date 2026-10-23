@@ -142,8 +142,9 @@ impl Value {
 
     /// `ToString` for primitives; for objects the interpreter has the version
     /// that calls `toString`/`valueOf`. The fallbacks here match what JS prints
-    /// for the built-in object kinds we model.
-    pub fn to_string(&self) -> String {
+    /// for the built-in object kinds we model — it is also the `Display` of the
+    /// type, so `value.to_string()` and `format!("{value}")` say the same thing.
+    pub fn js_string(&self) -> String {
         match self {
             Value::Undefined => "undefined".into(),
             Value::Null => "null".into(),
@@ -157,7 +158,7 @@ impl Value {
     /// `ToPropertyKey` — used for `obj[x]`.
     pub fn to_key(&self) -> Key {
         match self {
-            Value::Str(s) => Key::from_str(s),
+            Value::Str(s) => Key::parse(s),
             Value::Number(n) => Key::Num(*n),
             other => Key::Name(Rc::from(other.to_string())),
         }
@@ -209,6 +210,12 @@ impl Value {
             Value::Object(o) => o.borrow().inspect(0),
             other => other.to_string(),
         }
+    }
+}
+
+impl fmt::Display for Value {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        f.write_str(&self.js_string())
     }
 }
 
@@ -306,7 +313,9 @@ fn order_keys(keys: &mut Vec<String>) {
 
 impl Key {
     /// Numeric strings become index keys (arrays depend on that).
-    pub fn from_str(s: &str) -> Key {
+    ///
+    /// Not `FromStr`: an index key is not a lossless parse of a string.
+    pub fn parse(s: &str) -> Key {
         if let Ok(i) = s.parse::<u32>() {
             Key::Num(i as f64)
         } else {
@@ -500,7 +509,7 @@ impl Obj {
 
     /// Define (or replace) an own property.
     pub fn define(&mut self, key: &str, prop: Prop) {
-        let key = Key::from_str(key);
+        let key = Key::parse(key);
         match self.find(&key) {
             Some(i) => self.props[i].1 = prop,
             None => self.props.push((key, prop)),
@@ -656,11 +665,10 @@ impl Obj {
                 }
                 // an object that only inherits shows that, which is very helpful
                 // when debugging why a built-in method is missing
-                if parts.is_empty() && self.proto.is_some() {
-                    return format!(
-                        "[[Prototype]] {}",
-                        self.proto.as_ref().unwrap().borrow().class_name()
-                    );
+                if let Some(proto) = &self.proto {
+                    if parts.is_empty() {
+                        return format!("[[Prototype]] {}", proto.borrow().class_name());
+                    }
                 }
                 if parts.is_empty() {
                     "{}".into()

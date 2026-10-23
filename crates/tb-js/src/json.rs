@@ -375,7 +375,7 @@ fn stringify_object(
     }
     let keys = o.borrow().own_keys();
     for k in keys {
-        let v = it.get(&Value::Object(o.clone()), &Key::from_str(&k))?;
+        let v = it.get(&Value::Object(o.clone()), &Key::parse(&k))?;
         let s = stringify(it, &v, replacer, indent, depth + 1)?;
         if s.is_empty() || v.type_of() == "function" {
             continue;
@@ -429,9 +429,9 @@ impl Interp {
         if value.is_object() {
             let keys = self.own_enumerable(&value)?;
             for k in keys {
-                let child = self.get(&value, &Key::from_str(&k))?;
+                let child = self.get(&value, &Key::parse(&k))?;
                 let new = self.revive(reviver, &value, Value::string(k.clone()), child)?;
-                self.set(&value, &Key::from_str(&k), new)?;
+                self.set(&value, &Key::parse(&k), new)?;
             }
         }
         self.call(reviver, holder.clone(), vec![key, value])

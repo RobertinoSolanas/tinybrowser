@@ -164,13 +164,11 @@ fn tokenise(children: &[LayoutBox], dom: &Dom, font: &Font, path: &[usize], flow
             });
             continue;
         }
-        if is_break(dom, child) {
-            if child.node.is_some() {
-                flows.push(Flow::Break {
-                    style: style.clone(),
-                });
-                continue;
-            }
+        if is_break(dom, child) && child.node.is_some() {
+            flows.push(Flow::Break {
+                style: style.clone(),
+            });
+            continue;
         }
         match child.kind {
             BoxKind::Text => {
@@ -320,7 +318,7 @@ pub fn layout_inline(
     let base = container.style.clone();
     let font = Font::system();
     let mut flows: Vec<Flow> = Vec::new();
-    tokenise(&container.children, dom, &font, &[], &mut flows);
+    tokenise(&container.children, dom, font, &[], &mut flows);
 
     let mut lines: Vec<LineBox> = Vec::new();
     let mut runs: Vec<TextRun> = Vec::new();
@@ -759,7 +757,7 @@ fn replaced_size(box_: &LayoutBox, style: &ComputedStyle, avail: f32, dom: &Dom)
 pub fn inline_extents(container: &LayoutBox, dom: &Dom) -> (f32, f32) {
     let font = Font::system();
     let mut flows: Vec<Flow> = Vec::new();
-    tokenise(&container.children, dom, &font, &[], &mut flows);
+    tokenise(&container.children, dom, font, &[], &mut flows);
     let mut min = 0.0f32;
     let mut max = 0.0f32;
     let mut line_min = 0.0f32;

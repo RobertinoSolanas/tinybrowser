@@ -84,13 +84,13 @@ impl HttpCache {
             if let Some(expires) = resp
                 .headers
                 .get("expires")
-                .and_then(|v| crate::cookies::parse_http_date(v))
+                .and_then(crate::cookies::parse_http_date)
             {
                 (expires - now).max(0)
             } else if let Some(lm) = resp
                 .headers
                 .get("last-modified")
-                .and_then(|v| crate::cookies::parse_http_date(v))
+                .and_then(crate::cookies::parse_http_date)
             {
                 // heuristic: 10% of the time since last modification
                 ((now - lm) / 10).clamp(0, 3600)

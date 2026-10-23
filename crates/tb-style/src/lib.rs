@@ -153,19 +153,10 @@ pub fn resolve_sources(
 }
 
 /// A style engine bound to a viewport: `style_document()` is the entry point.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub struct StyleEngine {
     pub viewport: Viewport,
     pub state: MatchState,
-}
-
-impl Default for StyleEngine {
-    fn default() -> Self {
-        StyleEngine {
-            viewport: Viewport::default(),
-            state: MatchState::default(),
-        }
-    }
 }
 
 impl StyleEngine {
@@ -250,7 +241,7 @@ mod tests {
             |href| Some(format!("@import url({href}); x{{color:red}}")),
             &mut problems,
         );
-        assert!(sheets.iter().all(|s| s.rules.len() >= 1));
+        assert!(sheets.iter().all(|s| !s.rules.is_empty()));
     }
 
     #[test]

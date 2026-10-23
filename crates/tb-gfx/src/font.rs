@@ -12,6 +12,51 @@ use crate::framebuffer::Framebuffer;
 use std::collections::HashMap;
 use tb_core::{Color, Rect};
 
+/// One text run: where it sits, what it says, how it looks.
+///
+/// [`Font::draw`] takes one of these instead of eight parameters — position,
+/// content and paint belong together, and `bold(..)`, `spacing(..)`,
+/// `clipped(..)` fill in the rest.
+#[derive(Debug, Clone, Copy)]
+pub struct TextRun<'a> {
+    pub x: f32,
+    pub baseline: f32,
+    pub text: &'a str,
+    pub size: f32,
+    pub bold: bool,
+    pub letter_spacing: f32,
+    pub color: Color,
+    pub clip: Option<Rect>,
+}
+
+impl<'a> TextRun<'a> {
+    /// A run of `text` with its baseline at `baseline`.
+    pub fn new(x: f32, baseline: f32, text: &'a str, size: f32, color: Color) -> Self {
+        TextRun {
+            x,
+            baseline,
+            text,
+            size,
+            bold: false,
+            letter_spacing: 0.0,
+            color,
+            clip: None,
+        }
+    }
+    pub fn bold(mut self, on: bool) -> Self {
+        self.bold = on;
+        self
+    }
+    pub fn spacing(mut self, px: f32) -> Self {
+        self.letter_spacing = px;
+        self
+    }
+    pub fn clipped(mut self, clip: Option<Rect>) -> Self {
+        self.clip = clip;
+        self
+    }
+}
+
 /// The glyph set.
 pub struct Font {
     extras: HashMap<char, [u8; 7]>,
@@ -80,7 +125,7 @@ impl Font {
             }
             w += adv;
             if bold {
-                w += scale as f32 * 0.5;
+                w += scale * 0.5;
             }
         }
         w
@@ -94,58 +139,16 @@ impl Font {
             .fold(0.0f32, f32::max)
     }
 
-    /// Draw `text` with its baseline at `baseline`; returns the advance.
+    /// Draw one text run; returns the advance.
     ///
     /// `x`/`baseline` are rounded to device pixels. Bold is synthesised by
     /// thickening each pixel one column to the right (the classic trick).
-    pub fn draw(
-        &self,
-        fb: &mut Framebuffer,
-        x: f32,
-        baseline: f32,
-        text: &str,
-        size: f32,
-        bold: bool,
-        color: Color,
-        clip: Option<Rect>,
-    ) -> f32 {
-        let scale = self.scale(size);
-        let mut pen_x = x.round() as i32;
-        let top = (baseline.round() as i32) - self.ascent(size) as i32;
-        for c in text.chars() {
-            let adv = ((GLYPH_WIDTH + 1) * scale as usize) as i32;
-            if c == '\t' {
-                pen_x += adv * 4;
-                continue;
-            }
-            if c != ' ' {
-                if let Some(rows) = self.rows(c) {
-                    self.draw_glyph(fb, pen_x, top, rows, scale, bold, color, clip);
-                }
-            }
-            pen_x += adv;
-        }
-        (pen_x - x.round() as i32) as f32
-    }
-
-    /// Draw `text` with letter spacing (used for `letter-spacing`, headings).
-    pub fn draw_spaced(
-        &self,
-        fb: &mut Framebuffer,
-        x: f32,
-        baseline: f32,
-        text: &str,
-        size: f32,
-        bold: bool,
-        letter_spacing: f32,
-        color: Color,
-        clip: Option<Rect>,
-    ) -> f32 {
-        let scale = self.scale(size);
-        let mut pen_x = x.round() as i32;
-        let top = baseline.round() as i32 - self.ascent(size) as i32;
-        let extra = letter_spacing.round() as i32;
-        for c in text.chars() {
+    pub fn draw(&self, fb: &mut Framebuffer, run: TextRun) -> f32 {
+        let scale = self.scale(run.size);
+        let mut pen_x = run.x.round() as i32;
+        let top = (run.baseline.round() as i32) - self.ascent(run.size) as i32;
+        let extra = run.letter_spacing.round() as i32;
+        for c in run.text.chars() {
             let adv = ((GLYPH_WIDTH + 1) * scale as usize) as i32 + extra;
             if c == '\t' {
                 pen_x += adv * 4;
@@ -153,12 +156,12 @@ impl Font {
             }
             if c != ' ' {
                 if let Some(rows) = self.rows(c) {
-                    self.draw_glyph(fb, pen_x, top, rows, scale, bold, color, clip);
+                    self.draw_glyph(fb, pen_x, top, rows, scale, &run);
                 }
             }
             pen_x += adv;
         }
-        (pen_x - x.round() as i32) as f32
+        (pen_x - run.x.round() as i32) as f32
     }
 
     fn draw_glyph(
@@ -168,10 +171,11 @@ impl Font {
         y: i32,
         rows: &[u8; 7],
         scale: u32,
-        bold: bool,
-        color: Color,
-        clip: Option<Rect>,
+        run: &TextRun,
     ) {
+        let bold = run.bold;
+        let color = run.color;
+        let clip = run.clip;
         for (ry, bits) in rows.iter().enumerate() {
             if *bits == 0 {
                 continue;
@@ -266,7 +270,10 @@ mod tests {
         let f = Font::system();
         let mut fb = Framebuffer::new(200, 20);
         let w = f.text_width("Hallo", 16.0, false, 0.0);
-        let adv = f.draw(&mut fb, 0.0, 14.0, "Hallo", 16.0, false, Color::BLACK, None);
+        let adv = f.draw(
+            &mut fb,
+            TextRun::new(0.0, 14.0, "Hallo", 16.0, Color::BLACK),
+        );
         assert_eq!(w, adv);
         assert!(f.text_width("Hallo", 16.0, true, 0.0) > w, "bold is wider");
         assert_eq!(f.text_width("", 16.0, false, 0.0), 0.0);
@@ -279,7 +286,7 @@ mod tests {
         let mut fb = Framebuffer::new(40, 20);
         fb.clear(Color::WHITE);
         // 'I' at scale 1: top row is .###. → x=1..3 painted at y = baseline-6
-        f.draw(&mut fb, 0.0, 8.0, "I", 7.0, false, Color::BLACK, None);
+        f.draw(&mut fb, TextRun::new(0.0, 8.0, "I", 7.0, Color::BLACK));
         assert_eq!(fb.get(1, 2), Color::BLACK);
         assert_eq!(fb.get(2, 2), Color::BLACK);
         assert_eq!(fb.get(3, 2), Color::BLACK);
@@ -295,13 +302,7 @@ mod tests {
         let clip = Rect::new(0.0, 0.0, 2.0, 20.0);
         f.draw(
             &mut fb,
-            0.0,
-            8.0,
-            "WW",
-            7.0,
-            false,
-            Color::BLACK,
-            Some(clip),
+            TextRun::new(0.0, 8.0, "WW", 7.0, Color::BLACK).clipped(Some(clip)),
         );
         assert_eq!(fb.get(10, 4), Color::WHITE, "text outside the clip is gone");
         // 'W' row 3 starts at x=0, which is still inside the 2px clip

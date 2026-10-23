@@ -39,6 +39,37 @@ fn taz_server() -> TestServer {
     server
 }
 
+/// T10.1: the offline acceptance test over the committed snapshot.
+#[test]
+fn taz_snapshot_loads() {
+    let server = taz_server();
+    let url = server.url("/");
+    let mut engine = Engine::new(EngineConfig::default());
+    let mut page = engine.load(&url).expect("the snapshot loads");
+
+    assert_eq!(page.status, 200);
+    assert_eq!(page.title(), "taz.de | taz.de");
+    let s = page.stats();
+    assert!(s.elements > 2500);
+    assert!(s.links > 150);
+    assert!(s.boxes > 2000);
+    // the snapshot is a big document: the page paints, and the pipeline has a
+    // problem list that stays short enough to read
+    let png = {
+        let mut p = std::env::temp_dir();
+        p.push("tinybrowser-taz-snapshot.png");
+        p
+    };
+    page.screenshot(&png, &tb_browser::PaintOptions::default())
+        .expect("screenshot");
+    assert!(png.exists());
+    assert!(
+        page.problems().all().len() < 200,
+        "problems: {}",
+        page.problems().all().len()
+    );
+}
+
 #[test]
 fn the_whole_pipeline_handles_a_newspage() {
     let server = taz_server();

@@ -619,9 +619,13 @@ impl Host {
 /// the stored keys, and a `@@k:` marker per key tells us which side changed —
 /// a key the map gained on its own (persisted state loaded after load, say) is
 /// pulled in rather than mistaken for a deletion.
+/// What a mirror holds: its own stored keys, and the `@@k:` markers that say
+/// which side wrote them last.
+type Mirrors = (Vec<(String, Value)>, Vec<(String, Value)>);
+
 pub fn sync_storage(map: &mut HashMap<String, String>, obj: &ObjRef) -> bool {
     const MARK: &str = "@@k:";
-    let (props, marks): (Vec<(String, Value)>, Vec<(String, Value)>) = {
+    let (props, marks): Mirrors = {
         let b = obj.borrow();
         let mut props = Vec::new();
         let mut marks = Vec::new();
@@ -672,7 +676,7 @@ pub fn sync_storage(map: &mut HashMap<String, String>, obj: &ObjRef) -> bool {
         if !value.is_string() {
             // `localStorage.n = 5` reads back as "5", like a real Storage
             obj.borrow_mut()
-                .define(&name, Prop::data(Value::string(&text)));
+                .define(name, Prop::data(Value::string(&text)));
         }
         obj.borrow_mut()
             .define_internal(&format!("{MARK}{name}"), Value::string(&text));
@@ -1007,7 +1011,7 @@ pub fn this_method_unlocked<F>(
 /// not throw the first away.
 pub fn merge_accessor(obj: &ObjRef, name: &str, getter: Option<ObjRef>, setter: Option<ObjRef>) {
     let mut b = obj.borrow_mut();
-    let key = Key::from_str(name);
+    let key = Key::parse(name);
     let (mut g, mut s, enumerable) = match b.get_own(&key) {
         Some(Prop {
             kind: tb_js::value::PropKind::Access { getter, setter },

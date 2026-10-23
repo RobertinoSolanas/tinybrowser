@@ -223,7 +223,7 @@ fn parse_hex(hex: &str) -> Option<Color> {
 }
 
 fn split_commas(s: &str) -> Vec<String> {
-    s.split(|c| c == ',' || c == ' ')
+    s.split([',', ' '])
         .map(|p| p.trim().to_string())
         .filter(|p| !p.is_empty() && p != "/")
         .collect()

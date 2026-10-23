@@ -72,8 +72,7 @@ impl Layout {
         self.block_sized(
             &mut root,
             Cb::new(icb, true),
-            None,
-            None,
+            ForcedSize::default(),
             &mut count,
             dom,
             &mut floats,
@@ -111,8 +110,10 @@ impl Layout {
         self.block_sized(
             box_,
             Cb::new(containing, false),
-            width_override,
-            None,
+            ForcedSize {
+                width: width_override,
+                height: None,
+            },
             count,
             dom,
             inherited_floats,
@@ -125,12 +126,13 @@ impl Layout {
         &self,
         box_: &mut LayoutBox,
         cb: Cb,
-        width_override: Option<f32>,
-        height_override: Option<f32>,
+        forced: ForcedSize,
         count: &mut usize,
         dom: &Dom,
         inherited_floats: &mut FloatState,
     ) {
+        let width_override = forced.width;
+        let height_override = forced.height;
         let containing = cb.rect;
         *count += 1;
         let style = box_.style.clone();
@@ -298,8 +300,7 @@ impl Layout {
                     self.block_sized(
                         child,
                         Cb::new(c, explicit_height.is_some()),
-                        None,
-                        None,
+                        ForcedSize::default(),
                         count,
                         dom,
                         floats,
@@ -424,8 +425,7 @@ impl Layout {
                     self.block_sized(
                         &mut tmp,
                         Cb::new(Rect::new(content.x, content.y, content.width, 0.0), false),
-                        Some(content.width),
-                        None,
+                        ForcedSize::width(content.width),
                         count,
                         dom,
                         &mut f,
@@ -435,8 +435,7 @@ impl Layout {
                     self.block_sized(
                         &mut tmp,
                         Cb::new(Rect::new(content.x, content.y, fit, 0.0), false),
-                        Some(fit),
-                        None,
+                        ForcedSize::width(fit),
                         count,
                         dom,
                         &mut f,
@@ -593,8 +592,10 @@ impl Layout {
                 self.block_sized(
                     &mut tmp,
                     Cb::new(child_rect, height_definite),
-                    if column { None } else { Some(main_size) },
-                    if column { Some(main_size) } else { None },
+                    ForcedSize {
+                        width: if column { None } else { Some(main_size) },
+                        height: if column { Some(main_size) } else { None },
+                    },
                     count,
                     dom,
                     &mut f,
@@ -823,6 +824,25 @@ impl Edge {
     }
 }
 
+/// A size the caller forces on a box whose containing block cannot supply one:
+/// flex items on their main axis, shrink-to-fit measurements. `None` means
+/// "resolve it yourself from the style and the containing block".
+#[derive(Debug, Clone, Copy, Default)]
+pub struct ForcedSize {
+    pub width: Option<f32>,
+    pub height: Option<f32>,
+}
+
+impl ForcedSize {
+    /// A forced width, height left to the box.
+    pub fn width(w: f32) -> Self {
+        ForcedSize {
+            width: Some(w),
+            height: None,
+        }
+    }
+}
+
 /// Margins keep `auto` until the width is known.
 #[derive(Debug, Clone, Copy)]
 struct Margins {
@@ -833,7 +853,7 @@ struct Margins {
 }
 
 impl Margins {
-    fn to_sides(&self) -> Sides {
+    fn to_sides(self) -> Sides {
         Sides {
             top: self.top.value,
             right: self.right.value,

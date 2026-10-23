@@ -93,23 +93,15 @@ impl TextPaint {
         clip: Option<Rect>,
     ) -> f32 {
         let font = crate::font::Font::system();
-        let w = if self.letter_spacing != 0.0 {
-            font.draw_spaced(
-                fb,
-                x,
-                baseline,
-                text,
-                self.size,
-                self.bold,
-                self.letter_spacing,
-                self.color,
-                clip,
-            )
-        } else if self.italic {
+        let w = if self.italic {
             self.draw_oblique(fb, x, baseline, text, clip)
         } else {
             font.draw(
-                fb, x, baseline, text, self.size, self.bold, self.color, clip,
+                fb,
+                crate::font::TextRun::new(x, baseline, text, self.size, self.color)
+                    .bold(self.bold)
+                    .spacing(self.letter_spacing)
+                    .clipped(clip),
             )
         };
         if self.underline {
@@ -144,7 +136,7 @@ impl TextPaint {
         for c in text.chars() {
             let adv = ((crate::font_data::GLYPH_WIDTH + 1) * scale as usize) as i32;
             if c == '\t' {
-                pen_x += (adv * 4) as i32;
+                pen_x += adv * 4;
                 continue;
             }
             if c != ' ' {
@@ -316,13 +308,7 @@ mod tests {
         slanted.clear(Color::WHITE);
         font.draw(
             &mut upright,
-            2.0,
-            14.0,
-            "AAAA",
-            14.0,
-            false,
-            Color::BLACK,
-            None,
+            crate::font::TextRun::new(2.0, 14.0, "AAAA", 14.0, Color::BLACK),
         );
         let p = TextPaint {
             italic: true,

@@ -462,8 +462,8 @@ fn litlen_code(sym: u16) -> (u32, u32) {
 
 fn length_code(len: usize) -> (u16, u32, u32) {
     let mut idx = 0usize;
-    for i in 0..LEN_BASE.len() {
-        if len >= LEN_BASE[i] as usize {
+    for (i, base) in LEN_BASE.iter().enumerate() {
+        if len >= *base as usize {
             idx = i;
         } else {
             break;
@@ -478,8 +478,8 @@ fn length_code(len: usize) -> (u16, u32, u32) {
 
 fn distance_code(d: usize) -> (u32, u32, u32) {
     let mut idx = 0usize;
-    for i in 0..DIST_BASE.len() {
-        if d >= DIST_BASE[i] as usize {
+    for (i, base) in DIST_BASE.iter().enumerate() {
+        if d >= *base as usize {
             idx = i;
         } else {
             break;

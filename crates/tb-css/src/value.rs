@@ -239,10 +239,10 @@ fn term_css(t: &CalcTerm) -> String {
 pub fn has_percentage(v: &Value) -> bool {
     match v {
         Value::Length(_, Unit::Percent) => true,
-        Value::Calc(c) => c.terms.iter().any(|(_, t)| match t {
-            CalcTerm::Length(_, Unit::Percent, _) => true,
-            _ => false,
-        }),
+        Value::Calc(c) => c
+            .terms
+            .iter()
+            .any(|(_, t)| matches!(t, CalcTerm::Length(_, Unit::Percent, _))),
         _ => false,
     }
 }
@@ -627,13 +627,7 @@ pub fn parse_calc(name: &str, args: Vec<Value>) -> CalcExpr {
                             // `length * number` / `length / number`
                             let factor = match (&term, op) {
                                 (CalcTerm::Number(n), '*') => *n,
-                                (CalcTerm::Number(n), '/') => {
-                                    if *n != 0.0 {
-                                        1.0 / *n
-                                    } else {
-                                        1.0
-                                    }
-                                }
+                                (CalcTerm::Number(n), '/') if *n != 0.0 => 1.0 / *n,
                                 _ => 1.0,
                             };
                             apply_factor_to_last(&mut terms, factor);

@@ -196,9 +196,7 @@ fn plain_object_as_event() {
     let mut p = Page::html("<div id=d>x</div>");
     p.js("window.seen = ''; document.getElementById('d').addEventListener('hi', e => { window.seen = e.type; });");
     let d = p.target("#d");
-    let js = format!(
-        "document.getElementById('d').dispatchEvent({{ type: 'hi', bubbles: false, cancelable: false }})"
-    );
+    let js = "document.getElementById('d').dispatchEvent({ type: 'hi', bubbles: false, cancelable: false })".to_string();
     let r = p.js(&js);
     assert!(r.to_boolean());
     assert_eq!(p.text("window.seen"), "hi");

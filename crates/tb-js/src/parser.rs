@@ -298,8 +298,8 @@ impl Parser {
                 }
                 P::Let => {
                     self.bump();
-                    let kind = self.parse_let_or_const_after_keyword(VarKind::Let)?;
-                    kind
+
+                    self.parse_let_or_const_after_keyword(VarKind::Let)?
                 }
                 P::Const => {
                     self.bump();
@@ -1799,7 +1799,7 @@ impl Parser {
                 let f = Rc::new(Function {
                     is_async: is_async || f.is_async,
                     is_generator: is_gen || f.is_generator,
-                    ..(&*f).clone()
+                    ..(*f).clone()
                 });
                 props.push(Prop::Method { key, func: f });
                 if !self.eat(P::Comma) {

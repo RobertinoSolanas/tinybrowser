@@ -390,7 +390,7 @@ pub fn decode_chunked(mut input: &[u8]) -> Result<Option<Vec<u8>>> {
         } else if input.starts_with(b"\n") {
             &input[1..]
         } else {
-            &input[..]
+            input
         };
         if size == 0 {
             return Ok(Some(out));

@@ -657,7 +657,7 @@ impl Interp {
 
     pub fn to_key(&mut self, v: &Value) -> JsResult<Key> {
         match v {
-            Value::Str(s) => Ok(Key::from_str(s)),
+            Value::Str(s) => Ok(Key::parse(s)),
             Value::Number(n) => Ok(Key::Num(*n)),
             other => Ok(Key::Name(Rc::from(self.to_string_val(other)?))),
         }
@@ -1110,7 +1110,7 @@ impl Interp {
                 }
                 // plain array-likes: { length, 0: … }
                 let len = self.get(v, &Key::Name(Rc::from("length")))?.to_integer();
-                if len >= 0.0 && len < 1e7 {
+                if (0.0..1e7).contains(&len) {
                     let mut out = Vec::new();
                     for i in 0..len as usize {
                         out.push(self.get(v, &Key::Num(i as f64))?);

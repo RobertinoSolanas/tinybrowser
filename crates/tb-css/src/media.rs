@@ -242,7 +242,7 @@ fn split_and(input: &str) -> Vec<String> {
                 depth -= 1;
                 cur.push(c);
             }
-            _ if depth == 0 && c.to_ascii_lowercase() == 'a' => {
+            _ if depth == 0 && c.eq_ignore_ascii_case(&'a') => {
                 // possible " and "
                 let word: String = chars[i..(i + 5).min(chars.len())].iter().collect();
                 if word.eq_ignore_ascii_case(" and ") {
