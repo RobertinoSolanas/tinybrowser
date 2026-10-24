@@ -25,8 +25,11 @@ falsche Art von "tiny".
 | `tb-js` (Lexer, Parser, Interpreter, Objekte, Promise/Async, RegExp, JSON) | ✅ fertig (taz.de: 47 KB echtes Inline-JS in **1,5 ms**, 12/12 Skripte sauber) | 112 |
 | `tb-dom-bindings` (window/document/Element, Events, `<script>`, Forms) | ✅ fertig (Wrapper mit Node-Handles, Timer, fetch-Hook) | 78 |
 | `tb-browser` (Engine, Navigation, ResourceLoader, Bilder, Page, Paint) | ✅ fertig (taz.de-Snapshot komplett: parse → script → layout → PNG) | 20 + 12 + 6 + 12 + 3 |
-| `tiny` (CLI) | ✅ fertig (`--dom/--text/--links/--layout/--screenshot/--repl/…`) | 15 |
-| `xtask` (`cargo junit` → `target/junit.xml`) | ✅ fertig (47 Suiten, 565 Tests) | 5 |
+| `tb-ui` (GUI-Shell: Tabs, Chrome, Modi, Maus, Tastatur, Selektion, Find, Hints, Inspector) | ✅ fertig (im Terminal **und** im X11-Fenster benutzbar) | 35 |
+| `tb-term` (Terminal-Backend, ohne `libc`) | ✅ fertig (Alternate Screen, SGR-Maus, Kitty-Tasten, OSC 52, Diff-Painting) | 20 |
+| `tb-x11` (X11-Backend, ohne Xlib/x11rb) | ✅ fertig (Fenster, `PutImage`, Tasten, Maus, Resize, `WM_DELETE` — gegen `Xvfb` verifiziert) | 20 |
+| `tiny` (CLI) | ✅ fertig (`--dom/--text/--links/--layout/--screenshot/--repl/…`, `--ui` für das GUI) | 15 |
+| `xtask` (`cargo junit` → `target/junit.xml`) | ✅ fertig (56 Suiten, 641 Tests) | 5 |
 
 Der detaillierte Fortschritt steht in [`todolist.md`](todolist.md) (jede Aufgabe
 wird beim Fertigstellen abgehakt).
@@ -35,7 +38,7 @@ wird beim Fertigstellen abgehakt).
 
 ```console
 $ cargo test --workspace 2>&1 | grep 'test result' | awk '{s+=$4} END {print s" Tests, 0 Fehler"}'
-565 Tests, 0 Fehler
+641 Tests, 0 Fehler
 $ cargo clippy --workspace --all-targets -- -D warnings   # warning-free
 ```
 
@@ -118,6 +121,151 @@ Beispiele:
 cargo run --release -- --links https://taz.de | head
 cargo run --release -- --repl fixtures/taz.de.html   # document.title usw.
 cargo run --release -- --screenshot /tmp/taz.png --height 4000 https://taz.de
+```
+
+---
+
+## GUI — user interactions
+
+`--ui` öffnet den richtigen Browser: Tabs, Adressleiste, Lesezeichenleiste,
+Seite, Statuszeile — mit Maus **und** Tastatur. Was dabei gezeichnet wird,
+entscheidet das Backend; die Shell (`tb-ui`) selbst kennt weder Terminal noch X.
+
+```bash
+cargo run --release -- --ui                      # X11-Fenster, sonst Terminal
+cargo run --release -- --ui --ui-backend term    # der Browser im Terminal
+cargo run --release -- --ui --ui-backend x11     # hart auf X11 bestehen
+cargo run --release -- --ui --theme dark --zoom 1.25 https://taz.de
+cargo run --release -- --ui --no-net file://$PWD/fixtures/taz.de.html
+```
+
+### Backends
+
+| Backend | braucht | bemerkenwert |
+|---|---|---|
+| `x11` | `DISPLAY` | X-Protokoll selbst geredet — Connection Setup, `CreateWindow`, `CreateGC`, `PutImage` (Z-pixmap), `ChangeProperty` für Titel/`WM_DELETE_WINDOW`, `GetKeyboardMapping` für Tasten; kein Xlib, kein x11rb |
+| `term` | ein TTY | Alternate Screen, SGR-Maus inkl. Drag und Rad, Bracketed Paste, Kitty CSI-u-Tasten, OSC 0 Titel, OSC 52 Clipboard, Geometry-Query `CSI 18 t` mit `stty size` als Fallback, DIFF-Painting (nur geänderte Zellen) |
+| `headless` | nichts | malt einen Frame auf die Konsole — für Demos und CI |
+
+`auto` (Default) nimmt X11, wenn `DISPLAY` gesetzt ist, sonst das Terminal.
+
+Der Terminal-Backend räumt auf, egal wie er endet: `stty -g` wird in
+`shutdown()` **und** im `Drop` zurückgesetzt, damit die Shell danach nicht
+taumelt.
+
+### Was wo sitzt
+
+```console
+ 1 tinybrowser   2 taz.de        x  +      ← Tabstrip (Klick, Mittelklick, Rad)
+ [<] [>] [o] [^]  (·https://taz.de   [*] [i] [=]  ← Navigation, Adresse, Lesezeiche…
+ politik  netz  kultur  …                          ← Lesezeichenleiste (Ctrl+B)
+ …die Seite…                                       ← Viewport, scrollt, selektiert
+https://taz.de/politik · 42% of 8420 px · zoom 100% · 2 problems   ← Statuszeile
+```
+
+### Tastatur: Modi zuerst
+
+Die Shell weiß, **wer die Tastatur hat** (`Mode`): die Seite, die Adressleiste,
+die Find-Leiste, die Kommandozeile, eine Hint-Sequenz, ein Overlay. Deshalb ist
+`j` auf der Seite „scrollen“ und in der Adressleiste ein `j`.
+
+| Taste | Wirkung |
+|---|---|
+| `Ctrl+L` / `Alt+D` / `o` | Adresse bearbeiten |
+| `Ctrl+T` / `Ctrl+N` | neuer Tab · `Ctrl+W` / `x` schließen · `Ctrl+Shift+T` wiederherstellen |
+| `Ctrl+1…8` / `Ctrl+9` / `Ctrl+Tab` | Tab n / letzter Tab / nächster Tab (`Ctrl+Shift+Tab` zurück) |
+| `Alt+Left` / `H`, `Alt+Right` / `L`, `Alt+H` | zurück, vor, Startseite |
+| `Ctrl+R` / `r`, `Ctrl+Shift+R` | neu laden, ohne Cache |
+| `/` oder `Ctrl+F`, dann Tippen | finden (live, mit Treffer-Zähler); `Enter` akzeptiert |
+| `n` / `N` | nächster / vorheriger Treffer (auch nachdem die Leiste zu ist) |
+| `f` / `F` | Link-Hints; Buchstaben tippen, `Enter` folgt, `Esc` abbricht |
+| `Tab` / `Shift+Tab`, `Enter` / `Space` | Fokus durch die Seite, Element auslösen |
+| `j` `k` `h` `l`, Pfeile, `Space`, `PgUp/PgDn`, `g` / `G` | scrollen |
+| `Ctrl+ +` / `Ctrl+ -` / `Ctrl+0` | Zoom (auch `Ctrl`+Rad) |
+| `Ctrl+A`, `Ctrl+C` / `y`, `Ctrl+V` / `p` | alles markieren, kopieren, einfügen |
+| `Ctrl+D` / `Ctrl+B` | Lesezeichen setzen / Leiste zeigen |
+| `Ctrl+U` | Quelltext (bzw. DOM-Baum, wenn die Quelle weg ist) |
+| `F12` / `i` | Inspector · `Ctrl+J` Konsole · `Ctrl+Shift+C` Element anklicken |
+| `K` | Theme hell/dunkel · `:` Kommandozeile · `F1` / `?` Hilfe · `Esc` zu |
+| `Ctrl+Q` | beenden |
+
+### Maus
+
+* **Klick** auf einen Link folgt ihm; auf einen Button, ein Kästchen oder einen
+  `<select>` löst das Element aus (DOM-Events inklusive, `preventDefault()`
+  wird respektiert).
+* **Ziehen** selektiert Text über die Treffer-Geometrie der Layout-Läufe; beim
+  Loslassen geht die Auswahl in die Zwischenablage (XTerm-Gewohnheit),
+  `Ctrl+C` / `y` tut es auch. **Doppelklick** wählt ein Wort, **Dreifachklick**
+  die Zeile, `Ctrl+A` die ganze Seite.
+* **Mittelklick** auf einen Link öffnet ihn im neuen Tab, **Ctrl+Klick** im
+  Hintergrund-Tab — die aktuelle Seite bleibt, wo sie war.
+* **Rechtsklick** öffnet das Kontextmenü (Link, Bild, Adresse, Seite).
+* **Rad** scrollt; über dem Tabstrip blättert er durch die Tabs, mit `Ctrl`
+  wird gezoomt.
+* **Hover** auf einem Link schreibt das Ziel in die Statuszeile — und mit
+  `--hover-css` zusätzlich den CSS-Status (`:hover`) in den Inspector.
+
+Formulare sind mit der Maus benutzbar: ins Feld klicken, tippen, `Enter`
+submitiert (ohne Skripte baut die Shell das `GET` selbst, mit Skripten feuert
+sie erst das `submit`-Event und entscheidet dann, ob die Seite es nicht tat).
+
+### Kommandozeile (`:`)
+
+```console
+:o https://taz.de      :tabnew https://example.org   :close   :reload
+:back  :forward  :home  :find steuerreform  :bookmarks  :source
+:theme dark   :zoom 150   :devtools   :console   :help   :quit
+```
+
+### `--ui-script`: das GUI als Test
+
+Bildschirme sind schwer zu testen, Events nicht. `--ui-script` füttert dieselbe
+Shell mit Taten und printet, was sie sieht — so entstehen die GUI-Tests, ohne
+Fenster und ohne Terminal:
+
+```console
+$ cat script.txt
+open file:///tmp/tbui/home.html
+key ctrl+l
+type https://taz.de
+enter
+wait 300
+click 240 180        # UI-Pixel
+wheel 400 400 3
+title
+url
+status
+dump                 # der komplette Bildschirm als Text
+$
+cargo run --release -- --ui --ui-script script.txt --no-net
+```
+
+Verben: `open|goto`, `back`, `forward`, `reload`, `home`, `newtab`, `close`,
+`tab N`, `zoom in|out`, `theme`, dazu `key`, `type`, `paste`, `enter`,
+`escape`, `tab`, `click X Y`, `cell C R`, `move`, `drag`, `wheel X Y N`,
+`drag X Y`, `resize W H`, `wait MS` und als Ausgabe `title`, `url`, `status`, `text`,
+`links`, `problems`, `console`, `tabcount`, `dump`.
+
+Die interaktive Variante testet `crates/tb-ui/tests/ui.rs` (35 Fälle: Klick auf
+einen Link, Drag-Selektion, Hints, Tabs, Find, Zoom, Inspector, `Tab`
+durch die Seite, Fragment-Scrolling …) — jeweils ein Event rein, ein
+Bildschirm raus.
+
+### GUI-Flags
+
+```
+--ui                    das Fenster öffnen (sonst CLI-Modus)
+--ui-backend auto|…     x11, term oder headless
+--theme light|dark      Theme
+--zoom N                Start-Zoom (1.0 = 100 %)
+--new-tab URL           weiteren Tab öffnen (wiederholbar)
+--home URL              Startseite
+--search-url URL        Suchmaschine, {} = Platzhalter
+--bookmarks DATEI       Lesezeichen-Datei (JSON, mit tb-js' eigenem Parser gelesen)
+--hover-css             :hover/:focus/:active mit in den Inspector
+--no-chrome             ohne Tabstrip/Leisten (nur die Seite)
+--ui-script DATEI       das GUI mit Taten aus einer Datei steuern
 ```
 
 ---
@@ -528,7 +676,7 @@ Der Snapshot-Lauf ist der *regressionsdichte* Teil: 2895 Elemente, 262 Links,
 
 ```bash
 cargo build --release                        # alles
-cargo test --workspace                       # 565 Tests, 47 Suiten
+cargo test --workspace                       # 641 Tests, 56 Suiten
 cargo test -p tb-browser --test taz_live -- --ignored   # Live-Test (Netz nötig)
 cargo clippy --workspace --all-targets -- -D warnings   # muss warnungsfrei sein
 cargo fmt --all --check
@@ -611,6 +759,11 @@ crates/
   tb-js/                   JS-Engine: Lexer, Parser, Interpreter, EventLoop
   tb-dom-bindings/         window/document/Element/Events für JS
   tb-browser/              Engine, Navigation, ResourceLoader, Page
+  tb-ui/                   das GUI: Tabs, Chrome, Modi, Maus/Tastatur,
+                           Selektion, Find, Hints, Inspector — backend-frei
+  tb-term/                 Terminal-Backend: ANSI/SGR-Ausgabe, Decoder für
+                           Tasten/Maus/Paste, Diff-Painting, stty ohne libc
+  tb-x11/                  X11-Backend: Protokoll selbst geredet (kein x11rb)
   tb-cli/                  Binary `tiny`
   tb-testkit/              HTTP-Testserver für E2E-Tests
 tools/xtask/               cargo junit

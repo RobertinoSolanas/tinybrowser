@@ -13,6 +13,9 @@ members = [
     "crates/tb-dom-bindings",
     "crates/tb-browser",
     "crates/tb-testkit",
+    "crates/tb-ui",
+    "crates/tb-term",
+    "crates/tb-x11",
     "crates/tb-cli",
     "tools/xtask",
 ]
@@ -38,6 +41,9 @@ tb-js = { path = "crates/tb-js" }
 tb-dom-bindings = { path = "crates/tb-dom-bindings" }
 tb-browser = { path = "crates/tb-browser" }
 tb-testkit = { path = "crates/tb-testkit" }
+tb-ui = { path = "crates/tb-ui" }
+tb-term = { path = "crates/tb-term" }
+tb-x11 = { path = "crates/tb-x11" }
 
 # The ONLY third-party dependencies of the whole browser: TLS + roots.
 # Everything else (HTTP/1.1, URL, HTML, CSS, JS, layout, rasterizer, PNG,

@@ -55,7 +55,7 @@ mod style_api;
 mod tokens;
 mod window;
 
-pub use events::{dispatch, make_event, EVENT_HANDLERS};
+pub use events::{dispatch, fire_init, make_event, EventInit, EVENT_HANDLERS};
 pub use host::{
     evt_target_of, node_of, EvtTarget, FetchHook, Host, HostRef, NavRequest, NodeHandle,
     PageContext, ReadyState,
@@ -200,6 +200,82 @@ impl DomBindings {
     /// Dispatch an event from Rust (a real click, a `visibilitychange`, …).
     pub fn fire(&mut self, rt: &mut Runtime, target: EvtTarget, kind: &str) -> JsResult<Value> {
         events::fire(&self.host, &mut rt.interp, target, kind, true)
+    }
+
+    /// Dispatch an event **with a payload** — the one a GUI calls: a click has
+    /// `clientX`/`button`/`ctrlKey`, a key press has `key`/`code`. The answer is
+    /// "was the default action prevented?" (see [`fire_init`]).
+    pub fn fire_with(
+        &mut self,
+        rt: &mut Runtime,
+        target: EvtTarget,
+        kind: &str,
+        init: EventInit,
+    ) -> JsResult<Value> {
+        fire_init(&self.host, &mut rt.interp, target, kind, init)
+    }
+
+    /// Move focus (blur the old element, `focus`/`focusin` on the new). `None`
+    /// blurs whatever had it — what happens when the chrome takes the caret.
+    pub fn set_focus(&mut self, rt: &mut Runtime, id: Option<NodeId>) -> Result<(), String> {
+        let out = html::set_focus(&self.host, &mut rt.interp, id);
+        if let Ok(mut h) = self.host.try_borrow_mut() {
+            h.touch();
+        }
+        out.map(|_| ()).map_err(|e| rt.interp.format_thrown(&e))
+    }
+
+    /// The node a `:hover` rule should see (`None` clears it).
+    pub fn set_hover(&mut self, id: Option<NodeId>) {
+        if let Ok(mut h) = self.host.try_borrow_mut() {
+            if h.match_state.hover != id {
+                h.match_state.hover = id;
+                h.touch();
+            }
+        }
+    }
+
+    /// The node a `:active` rule should see while a button is down.
+    pub fn set_active(&mut self, id: Option<NodeId>) {
+        if let Ok(mut h) = self.host.try_borrow_mut() {
+            if h.match_state.active != id {
+                h.match_state.active = id;
+                h.touch();
+            }
+        }
+    }
+
+    /// `window.scrollX/Y` after the user scrolled.
+    pub fn set_scroll(&mut self, x: f64, y: f64) {
+        if let Ok(mut h) = self.host.try_borrow_mut() {
+            h.scroll = (x, y);
+        }
+    }
+
+    pub fn scroll_pos(&self) -> (f64, f64) {
+        let h = self.host.borrow();
+        h.scroll
+    }
+
+    /// Type into a control: writes the **dirty value** (`el.value = …`), never
+    /// the `value` attribute, so `defaultValue` keeps answering honestly.
+    pub fn set_input_value(&mut self, id: NodeId, value: &str) -> Result<(), String> {
+        let mut h = self.host.borrow_mut();
+        if !h.dom.exists(id) {
+            return Err("node is gone".into());
+        }
+        html::set_value(&mut h, id, value).map_err(|e| e.to_string())?;
+        h.touch();
+        Ok(())
+    }
+
+    /// The control's current API value (`el.value`), including what was typed.
+    pub fn input_value(&self, id: NodeId) -> String {
+        let h = self.host.borrow();
+        if !h.dom.exists(id) {
+            return String::new();
+        }
+        h.form_value(id, || html::value_of(&h.dom, id))
     }
 
     /// A fresh event object, ready to hand to `dispatchEvent`.

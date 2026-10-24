@@ -491,42 +491,10 @@ pub fn install(it: &mut Interp, host: &HostRef, proto: &ObjRef) {
         Ok(Value::Undefined)
     });
     method_unlocked(it, host, proto, "focus", 0, |it, href, id, _args| {
-        let previous = {
-            let Ok(mut h) = href.try_borrow_mut() else {
-                return Err(it.type_error("focus: DOM is busy"));
-            };
-            let prev = h.match_state.focus.filter(|p| *p != id);
-            h.match_state.focus = Some(id);
-            prev
-        };
-        // the old element blurs first, like in a browser
-        if let Some(p) = previous {
-            let ok = {
-                let h = href
-                    .try_borrow()
-                    .map_err(|_| it.type_error("focus: DOM is busy"))?;
-                h.dom.exists(p)
-            };
-            if ok {
-                events::fire(href, it, EvtTarget::node(p), "blur", false)?;
-            }
-        }
-        events::fire(href, it, EvtTarget::node(id), "focus", false)?;
-        events::fire(href, it, EvtTarget::node(id), "focusin", true)?;
-        Ok(Value::Undefined)
+        set_focus(href, it, Some(id))
     });
     method_unlocked(it, host, proto, "blur", 0, |it, href, id, _args| {
-        {
-            let Ok(mut h) = href.try_borrow_mut() else {
-                return Err(it.type_error("blur: DOM is busy"));
-            };
-            if h.match_state.focus == Some(id) {
-                h.match_state.focus = None;
-            }
-        }
-        events::fire(href, it, EvtTarget::node(id), "blur", false)?;
-        events::fire(href, it, EvtTarget::node(id), "focusout", true)?;
-        Ok(Value::Undefined)
+        blur(href, it, Some(id))
     });
     method(it, host, proto, "select", 0, |_it, _h, _id, _args| {
         Ok(Value::Undefined)
@@ -655,7 +623,7 @@ fn option_value(dom: &tb_dom::Dom, id: NodeId) -> String {
 /// Set the *API* value of a control. `input` and `textarea` remember it apart
 /// from the attribute (`defaultValue` stays); `select` moves the `selected`
 /// flag, because that is how a select's value is expressed in the markup.
-fn set_value(h: &mut Host, id: NodeId, value: &str) -> JsResult<()> {
+pub(crate) fn set_value(h: &mut Host, id: NodeId, value: &str) -> JsResult<()> {
     match h.dom.tag(id) {
         Some("option") => h.dom.set_attr(id, "value", value),
         Some("select") => {
@@ -691,6 +659,72 @@ fn selected_index(dom: &tb_dom::Dom, id: NodeId) -> usize {
     opts.iter()
         .position(|o| dom.has_attr(*o, "selected"))
         .unwrap_or(0)
+}
+
+/// Move focus to `id` (`None` = nowhere): blur the old element first, then
+/// `:focus` matching, `focus` and the bubbling `focusin`.
+///
+/// This is `element.focus()` **and** the embedder's focus change (Tab, a click
+/// into a text field) — one implementation, so both agree about the order.
+pub fn set_focus(
+    host: &crate::host::HostRef,
+    it: &mut tb_js::Interp,
+    id: Option<tb_dom::NodeId>,
+) -> tb_js::JsResult<tb_js::Value> {
+    let Some(id) = id else {
+        return blur(host, it, None);
+    };
+    let previous = {
+        let Ok(mut h) = host.try_borrow_mut() else {
+            return Err(it.type_error("focus: DOM is busy"));
+        };
+        let prev = h.match_state.focus.filter(|p| *p != id);
+        h.match_state.focus = Some(id);
+        prev
+    };
+    // the old element blurs first, like in a browser
+    if let Some(p) = previous {
+        let ok = {
+            let h = host
+                .try_borrow()
+                .map_err(|_| it.type_error("focus: DOM is busy"))?;
+            h.dom.exists(p)
+        };
+        if ok {
+            events::fire(host, it, EvtTarget::node(p), "blur", false)?;
+        }
+    }
+    events::fire(host, it, EvtTarget::node(id), "focus", false)?;
+    events::fire(host, it, EvtTarget::node(id), "focusin", true)?;
+    Ok(Value::Undefined)
+}
+
+/// Drop focus (`None`: the currently focused element, e.g. the user clicked the
+/// background or the chrome took the caret).
+pub fn blur(
+    host: &crate::host::HostRef,
+    it: &mut tb_js::Interp,
+    id: Option<tb_dom::NodeId>,
+) -> tb_js::JsResult<tb_js::Value> {
+    let current = {
+        let Ok(mut h) = host.try_borrow_mut() else {
+            return Err(it.type_error("blur: DOM is busy"));
+        };
+        match id {
+            Some(id) if h.match_state.focus == Some(id) => {
+                h.match_state.focus = None;
+                Some(id)
+            }
+            Some(_) => None,
+            None => h.match_state.focus.take(),
+        }
+    };
+    let Some(id) = current else {
+        return Ok(Value::Undefined);
+    };
+    events::fire(host, it, EvtTarget::node(id), "blur", false)?;
+    events::fire(host, it, EvtTarget::node(id), "focusout", true)?;
+    Ok(Value::Undefined)
 }
 
 /// What a click does when no listener cancelled it: a checkbox or radio button

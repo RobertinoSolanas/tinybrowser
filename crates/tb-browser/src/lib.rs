@@ -36,9 +36,10 @@ pub mod resources;
 
 pub use engine::{assemble_sheets, paint_options, Engine, History, NavState};
 pub use images::{load_images, ImageStore};
-pub use page::{Heading, Link, Page, PageStats, Timings};
+pub use page::{Heading, Link, Modifiers, Page, PageStats, Timings};
 pub use paint::{paint, PaintOptions};
 pub use resources::{file_path, url_for_input, Loaded, ResourceLoader, SharedLoader};
+pub use tb_dom_bindings::EventInit;
 
 /// Everything a page carries that is worth re-exporting: the embedder should
 /// not have to reach into four crates to handle a navigation.

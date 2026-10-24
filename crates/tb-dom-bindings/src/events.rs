@@ -460,11 +460,95 @@ pub fn fire(
     kind: &str,
     cancelable: bool,
 ) -> JsResult<Value> {
+    fire_init(
+        host,
+        it,
+        target,
+        kind,
+        EventInit {
+            bubbles: Some(true),
+            cancelable: Some(cancelable),
+            props: Vec::new(),
+        },
+    )
+}
+
+/// The payload of an event the **embedder** fires. A real click has coordinates
+/// and modifier keys, a real key press has `key`/`code`; scripts read exactly
+/// those fields, so an event without them is a different event. `fire` is the
+/// plain case, this is the one a GUI uses.
+#[derive(Debug, Clone, Default)]
+pub struct EventInit {
+    pub bubbles: Option<bool>,
+    pub cancelable: Option<bool>,
+    /// Anything else as JS values: `clientX`, `key`, `ctrlKey`, `detail`, …
+    pub props: Vec<(String, Value)>,
+}
+
+impl EventInit {
+    /// Bubbling and cancelable, no extra fields — the shape of a real click.
+    pub fn new() -> EventInit {
+        EventInit {
+            bubbles: Some(true),
+            cancelable: Some(true),
+            props: Vec::new(),
+        }
+    }
+
+    pub fn cancelable(mut self, v: bool) -> EventInit {
+        self.cancelable = Some(v);
+        self
+    }
+
+    pub fn bubbles(mut self, v: bool) -> EventInit {
+        self.bubbles = Some(v);
+        self
+    }
+
+    pub fn num(mut self, name: &str, v: f64) -> EventInit {
+        self.props.push((name.to_string(), Value::Number(v)));
+        self
+    }
+
+    pub fn bit(mut self, name: &str, v: bool) -> EventInit {
+        self.props.push((name.to_string(), Value::Boolean(v)));
+        self
+    }
+
+    pub fn text(mut self, name: &str, v: &str) -> EventInit {
+        self.props.push((name.to_string(), Value::string(v)));
+        self
+    }
+
+    pub fn val(mut self, name: &str, v: Value) -> EventInit {
+        self.props.push((name.to_string(), v));
+        self
+    }
+}
+
+/// Fire an event with an explicit payload (see [`EventInit`]).
+///
+/// The return value is the event's "not cancelled" state: `false` means a
+/// listener called `preventDefault()`, so the embedder must skip the default
+/// action — a cancelled click on a link must not navigate.
+pub fn fire_init(
+    host: &HostRef,
+    it: &mut Interp,
+    target: EvtTarget,
+    kind: &str,
+    init: EventInit,
+) -> JsResult<Value> {
     let proto = host.try_borrow().ok().and_then(|h| h.protos.event.clone());
     let o = Rc::new(std::cell::RefCell::new(Obj::plain()));
-    o.borrow_mut().define_value("bubbles", Value::Boolean(true));
     o.borrow_mut()
-        .define_value("cancelable", Value::Boolean(cancelable));
+        .define_value("bubbles", Value::Boolean(init.bubbles.unwrap_or(true)));
+    o.borrow_mut().define_value(
+        "cancelable",
+        Value::Boolean(init.cancelable.unwrap_or(true)),
+    );
+    for (name, v) in init.props {
+        o.borrow_mut().define_value(&name, v);
+    }
     let ev = make_event(it, kind, Some(Value::Object(o)), proto);
     let allow = dispatch(host, it, target, ev)?;
     // The default action belongs to the click, not to `HTMLElement.click()`:

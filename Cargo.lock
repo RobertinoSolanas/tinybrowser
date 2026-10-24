@@ -133,7 +133,10 @@ dependencies = [
  "tb-dom",
  "tb-gfx",
  "tb-net",
+ "tb-term",
  "tb-testkit",
+ "tb-ui",
+ "tb-x11",
 ]
 
 [[package]]
@@ -223,10 +226,42 @@ dependencies = [
 ]
 
 [[package]]
+name = "tb-term"
+version = "0.1.0"
+dependencies = [
+ "tb-core",
+ "tb-gfx",
+ "tb-ui",
+]
+
+[[package]]
 name = "tb-testkit"
 version = "0.1.0"
 dependencies = [
  "tb-core",
+]
+
+[[package]]
+name = "tb-ui"
+version = "0.1.0"
+dependencies = [
+ "tb-browser",
+ "tb-core",
+ "tb-dom",
+ "tb-gfx",
+ "tb-js",
+ "tb-layout",
+ "tb-net",
+ "tb-style",
+]
+
+[[package]]
+name = "tb-x11"
+version = "0.1.0"
+dependencies = [
+ "tb-core",
+ "tb-gfx",
+ "tb-ui",
 ]
 
 [[package]]

@@ -9,10 +9,12 @@
 use std::cell::RefCell;
 use std::path::Path;
 use std::rc::Rc;
-use tb_core::{EngineConfig, Problems, Rect, Result};
+use tb_core::{EngineConfig, Phase, Problems, Rect, Result};
 use tb_css::StyleSheet;
 use tb_dom::{Dom, NodeId};
-use tb_dom_bindings::{DomBindings, EvtTarget, Host, NavRequest, ScriptReport};
+use tb_dom_bindings::{
+    DomBindings, EventInit, EvtTarget, Host, NavRequest, ScriptReport, EVENT_HANDLERS,
+};
 use tb_gfx::{Framebuffer, Image};
 use tb_js::{Runtime, Value};
 use tb_layout::{element_at, find_box, LayoutDocument};
@@ -99,9 +101,25 @@ pub struct Heading {
 }
 
 /// A live scripting session.
-struct Js {
+pub(crate) struct Js {
     rt: Runtime,
     bindings: DomBindings,
+}
+
+/// The modifier keys that were held for a pointer or key event. Real handlers
+/// read these (`if (e.ctrlKey) window.open(…)`), so they ride along.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct Modifiers {
+    pub ctrl: bool,
+    pub shift: bool,
+    pub alt: bool,
+    pub meta: bool,
+}
+
+impl Modifiers {
+    pub fn none() -> Modifiers {
+        Modifiers::default()
+    }
 }
 
 impl Js {
@@ -137,6 +155,17 @@ pub struct Page {
     pub nav_requests: Vec<NavRequest>,
     pub loader: SharedLoader,
     pub config: EngineConfig,
+    /// Scroll offset the UI last set (CSS px). The page keeps it so `render`,
+    /// hit testing and `window.scrollY` cannot disagree.
+    pub scroll_pos: (f32, f32),
+    /// Hover/focus/active when no scripts run — the plain-data twin of
+    /// `Host::match_state`, so `--no-js` pages still show a caret and a hover.
+    ui_hover: Option<NodeId>,
+    ui_focus: Option<NodeId>,
+    ui_active: Option<NodeId>,
+    /// The node the UI last reported as hovered (to notice *changes* — a
+    /// restyle on every pixel move would not be interactive).
+    hover_node: Option<NodeId>,
     js: Option<Js>,
     fb: Option<Framebuffer>,
 }
@@ -178,6 +207,11 @@ impl Page {
             nav_requests: Vec::new(),
             loader,
             config,
+            scroll_pos: (0.0, 0.0),
+            ui_hover: None,
+            ui_focus: None,
+            ui_active: None,
+            hover_node: None,
             js: js.map(|(rt, bindings)| Js { rt, bindings }),
             fb: None,
         }
@@ -545,6 +579,561 @@ impl Page {
             .map(String::from)
     }
 
+    /// Which of the page's own event handlers could react at all — worth
+    /// knowing before firing anything into a page (`GUI` diagnostics).
+    pub fn handler_kinds(&self) -> Vec<&'static str> {
+        EVENT_HANDLERS.to_vec()
+    }
+
+    // ------------------------------------------------------------ interaction --
+    //
+    // A screenshot needs none of this; a *browser* needs all of it. Everything
+    // here answers a question a pointer or a key raises — "what is under the
+    // cursor", "what would a click do", "give this node focus" — and goes
+    // through the same event machinery the page's own scripts see, so a handler
+    // can cancel a navigation exactly once and nobody has to guess who won.
+
+    /// The element under a **viewport** point: CSS px, `0/0` top-left of the
+    /// content area, scroll applied (the layout works in document coordinates).
+    pub fn element_at_viewport(&self, x: f32, y: f32) -> Option<NodeId> {
+        let (sx, sy) = self.scroll();
+        self.element_at(x + sx, y + sy)
+    }
+
+    /// The `<a href>` a click on `node` would follow — `node` itself or the
+    /// nearest anchor above it, resolved for display. `<area>` counts too.
+    pub fn closest_link(&self, node: NodeId) -> Option<String> {
+        let mut cur = Some(node);
+        while let Some(c) = cur {
+            if matches!(self.dom.tag(c), Some("a") | Some("area")) {
+                if let Some(href) = self.dom.attr(c, "href") {
+                    return Some(self.resolve_display(&href));
+                }
+            }
+            cur = self.dom.parent(c);
+        }
+        None
+    }
+
+    /// The link under a viewport point (what the status bar shows).
+    pub fn link_at_viewport(&self, x: f32, y: f32) -> Option<String> {
+        self.element_at_viewport(x, y)
+            .and_then(|n| self.closest_link(n))
+    }
+
+    /// `(tag, type)` of the form control at or above `node` — what a click or a
+    /// keystroke has to do: focus a text field, toggle a checkbox, open a
+    /// select, submit a button.
+    pub fn control_at(&self, node: NodeId) -> Option<(String, String)> {
+        let mut cur = Some(node);
+        while let Some(c) = cur {
+            let tag = self.dom.tag(c)?;
+            match tag {
+                "input" | "textarea" | "select" | "button" | "a" | "area" => {
+                    let kind = if tag == "input" {
+                        self.dom.attr(c, "type").unwrap_or_else(|| "text".into())
+                    } else {
+                        String::new()
+                    };
+                    return Some((tag.to_string(), kind));
+                }
+                _ => (),
+            }
+            cur = self.dom.parent(c);
+        }
+        None
+    }
+
+    /// A short `<a href="…">text</a>`-style description of a node — the
+    /// inspector and the status bar speak the user's language, not `NodeId(412)`.
+    pub fn describe(&self, node: NodeId) -> String {
+        let tag = self.dom.tag(node).unwrap_or("#text");
+        let mut out = String::from(tag);
+        if let Some(el) = self.dom.element(node) {
+            if let Some(id) = el.element_id() {
+                out.push('#');
+                out.push_str(id);
+            }
+            for c in el.classes().into_iter().take(3) {
+                out.push('.');
+                out.push_str(c);
+            }
+            for name in ["href", "src", "type", "alt", "name", "value"] {
+                if let Some(v) = el.attr(name) {
+                    out.push_str(&format!(" {name}={}", tb_core::text::truncate(v, 40)));
+                }
+            }
+        }
+        let text = collapse_ws(&self.dom.text_content(node));
+        if !text.is_empty() && !matches!(tag, "script" | "style") {
+            out.push_str(&format!("  {}", tb_core::text::truncate(&text, 48)));
+        }
+        out
+    }
+
+    /// Every element `Tab` can reach, in DOM order: links with `href`, form
+    /// controls that are not disabled, and anything with a `tabindex`.
+    pub fn focusables(&self) -> Vec<NodeId> {
+        let mut out = Vec::new();
+        for n in self.dom.descendants(self.dom.document()) {
+            let Some(el) = self.dom.element(n) else {
+                continue;
+            };
+            if el.has_attr("disabled") {
+                continue;
+            }
+            let ok = match el.tag.as_str() {
+                "a" | "area" => el.has_attr("href"),
+                "input" | "textarea" | "select" | "button" => el.attr("type") != Some("hidden"),
+                _ => el.has_attr("tabindex"),
+            };
+            if ok {
+                // `display: none` is not reachable by keyboard, and neither is
+                // an element without a box (the layout is the authority here)
+                if let Some(st) = self.styles.get(n) {
+                    if st.display == tb_style::Display::None {
+                        continue;
+                    }
+                }
+                out.push(n);
+            }
+        }
+        out
+    }
+
+    /// `document.activeElement`, or `None` while the chrome has the caret.
+    pub fn focused(&self) -> Option<NodeId> {
+        let h = self.host()?;
+        let h = h.borrow();
+        h.match_state.focus.filter(|n| h.dom.exists(*n))
+    }
+
+    /// Move focus into the page (`None` = the chrome took the caret). Fires
+    /// `blur`/`focus` and makes `:focus` rules apply — the page notices.
+    pub fn set_focus(&mut self, node: Option<NodeId>) {
+        if !self.has_js() {
+            // no scripts, no event machinery: remember it on the page instead so
+            // at least the caret and `Tab` still work
+            self.ui_focus = node;
+            return;
+        }
+        let current = self.focused();
+        if current == node {
+            return;
+        }
+        let Some(js) = self.js.as_mut() else {
+            return;
+        };
+        let _ = js.bindings.set_focus(&mut js.rt, node);
+        self.sync_after_js();
+    }
+
+    /// `:hover` for the node under the pointer.
+    ///
+    /// `restyle` says whether the cascade may run again: a page with 3 000
+    /// elements takes a visible moment for that, so a GUI opts in only when the
+    /// hovered element actually *changed* (and the CLI/offscreen tests keep it
+    /// off because nobody sees the difference).
+    pub fn set_hover(&mut self, node: Option<NodeId>, restyle: bool) {
+        let changed = self.hover_node != node;
+        if !changed {
+            return;
+        }
+        self.hover_node = node;
+        if !self.has_js() {
+            self.ui_hover = node;
+            return;
+        }
+        if let Some(js) = self.js.as_mut() {
+            js.bindings.set_hover(node);
+        }
+        if restyle {
+            self.restyle_and_layout();
+        }
+    }
+
+    /// `:active` while a mouse button is held on a node.
+    pub fn set_active(&mut self, node: Option<NodeId>) {
+        if let Some(js) = self.js.as_mut() {
+            js.bindings.set_active(node);
+        }
+        if node.is_none() {
+            self.ui_active = None;
+        } else {
+            self.ui_active = node;
+        }
+    }
+
+    /// The node the UI treats as hovered/focused/active when no scripts run —
+    /// the plain-data twin of `Host.match_state`.
+    pub fn ui_state(&self) -> (Option<NodeId>, Option<NodeId>, Option<NodeId>) {
+        if let Some(h) = self.host() {
+            let h = h.borrow();
+            return (
+                h.match_state.hover,
+                h.match_state.focus,
+                h.match_state.active,
+            );
+        }
+        (self.ui_hover, self.ui_focus, self.ui_active)
+    }
+
+    /// Current scroll offset (CSS px).
+    pub fn scroll(&self) -> (f32, f32) {
+        self.scroll_pos
+    }
+
+    /// Furthest down the page can go with the current viewport.
+    pub fn max_scroll(&self) -> f32 {
+        (self.content_height() - self.config.viewport.height).max(0.0)
+    }
+
+    /// How far right the content reaches (a wide table, `white-space: pre`).
+    pub fn content_width(&self) -> f32 {
+        self.layout
+            .as_ref()
+            .map(|l| l.scroll_size.width)
+            .unwrap_or(self.config.viewport.width)
+    }
+
+    /// The horizontal counterpart of [`Page::max_scroll`].
+    pub fn max_scroll_x(&self) -> f32 {
+        (self.content_width() - self.config.viewport.width).max(0.0)
+    }
+
+    /// Scroll to `(x, y)` — clamped, and told to the page so `window.scrollY`,
+    /// `position: sticky` and the paint cache all agree.
+    pub fn set_scroll(&mut self, x: f32, y: f32) {
+        let x = x.max(0.0);
+        let y = y.max(0.0).min(self.max_scroll());
+        if (self.scroll_pos.0 - x).abs() < 0.5 && (self.scroll_pos.1 - y).abs() < 0.5 {
+            return;
+        }
+        self.scroll_pos = (x, y);
+        if let Some(js) = self.js.as_mut() {
+            js.bindings.set_scroll(x as f64, y as f64);
+        }
+        self.invalidate_render();
+    }
+
+    /// Scroll the minimum so that `node` is inside the viewport.
+    pub fn scroll_into_view(&mut self, node: NodeId) {
+        let Some(r) = self.rect_of(node) else {
+            return;
+        };
+        let (sx, sy) = self.scroll_pos;
+        let vh = self.config.viewport.height;
+        let mut dy = 0.0;
+        if r.top() - sy < 0.0 {
+            dy = r.top() - sy;
+        } else if r.bottom() - sy > vh {
+            dy = r.bottom() - sy - vh;
+        }
+        let mut dx = 0.0;
+        let vw = self.config.viewport.width;
+        if r.left() - sx < 0.0 {
+            dx = r.left() - sx;
+        } else if r.right() - sx > vw {
+            dx = r.right() - sx - vw;
+        }
+        if dy != 0.0 || dx != 0.0 {
+            self.set_scroll(sx + dx, sy + dy);
+        }
+    }
+
+    /// Fire an event **with a payload** (a real click has coordinates, a real
+    /// key press has `key`). The answer is `false` when a listener called
+    /// `preventDefault()`, i.e. the embedder must not do the default action.
+    pub fn fire_init(&mut self, target: EvtTarget, kind: &str, init: EventInit) -> bool {
+        let allow = match self.js.as_mut() {
+            Some(js) => match js
+                .bindings
+                .fire_with(&mut js.rt, target, kind, init)
+                .map(|v| v.to_boolean())
+            {
+                Ok(v) => v,
+                Err(e) => {
+                    self.problems
+                        .warn(Phase::Script, format!("{kind} handler: {e}"));
+                    true
+                }
+            },
+            None => true,
+        };
+        self.sync_after_js();
+        allow
+    }
+
+    /// A pointer click on `node`: `mousedown` → `mouseup` → `click`, in that
+    /// order and with coordinates, so `preventDefault` and `clientX` behave.
+    /// `true` means a listener cancelled the default action (do not navigate).
+    pub fn pointer_click(
+        &mut self,
+        node: NodeId,
+        x: f32,
+        y: f32,
+        button: i32,
+        detail: i32,
+        mods: Modifiers,
+    ) -> bool {
+        let (sx, sy) = self.scroll_pos;
+        let init = |kind: &str| {
+            EventInit::new()
+                .text("type", kind)
+                .num("clientX", x as f64)
+                .num("clientY", y as f64)
+                .num("pageX", (x + sx) as f64)
+                .num("pageY", (y + sy) as f64)
+                .num("button", button as f64)
+                .num("detail", detail as f64)
+                .bit("ctrlKey", mods.ctrl)
+                .bit("shiftKey", mods.shift)
+                .bit("altKey", mods.alt)
+                .bit("metaKey", mods.meta)
+        };
+        let target = EvtTarget::node(node);
+        // `mousedown` may already cancel (a drag-to-select must not focus, a
+        // `mousedown` handler that calls preventDefault stops the click too)
+        let down = self.fire_init(target, "mousedown", init("mousedown"));
+        self.fire_init(target, "mouseup", init("mouseup"));
+        if !down {
+            return true;
+        }
+        !self.fire_init(target, "click", init("click"))
+    }
+
+    /// A key event on `node` (`keydown`/`keypress`/`keyup`). `true` when a
+    /// handler cancelled it — `preventDefault` on `keydown` means the field
+    /// must not insert the character.
+    pub fn key_event(
+        &mut self,
+        node: NodeId,
+        kind: &str,
+        key: &str,
+        code: &str,
+        mods: Modifiers,
+    ) -> bool {
+        self.fire_init(
+            EvtTarget::node(node),
+            kind,
+            EventInit::new()
+                .text("type", kind)
+                .text("key", key)
+                .text("code", code)
+                .num(
+                    "charCode",
+                    if key.chars().count() == 1 {
+                        key.chars().next().unwrap() as u32 as f64
+                    } else {
+                        0.0
+                    },
+                )
+                .bit("ctrlKey", mods.ctrl)
+                .bit("shiftKey", mods.shift)
+                .bit("altKey", mods.alt)
+                .bit("metaKey", mods.meta),
+        )
+    }
+
+    /// `keyup` for the key the user released.
+    pub fn keyup(&mut self, node: NodeId, key: &str) {
+        self.key_event(node, "keyup", key, key, Modifiers::default());
+    }
+
+    /// `change` — a select that moved, a checkbox the user ticked.
+    pub fn fire_change(&mut self, node: NodeId) {
+        self.fire_init(EvtTarget::node(node), "change", EventInit::new());
+    }
+
+    /// `submit` on a form. `false` means a listener cancelled it, so the
+    /// browser must not follow the action.
+    pub fn fire_submit(&mut self, node: NodeId) -> bool {
+        self.fire_init(
+            EvtTarget::node(node),
+            "submit",
+            EventInit::new().cancelable(true),
+        )
+    }
+
+    /// Type into a form control: the **dirty value** changes (the `value`
+    /// attribute does not), then `input`, then `change` like a real edit ends.
+    pub fn type_into(&mut self, node: NodeId, value: &str) {
+        if let Some(js) = self.js.as_mut() {
+            if js.bindings.set_input_value(node, value).is_err() {
+                return;
+            }
+        }
+        self.fire_init(
+            EvtTarget::node(node),
+            "input",
+            EventInit::new().cancelable(false),
+        );
+    }
+
+    /// `el.value` of a control, including what the user typed.
+    pub fn input_value(&self, node: NodeId) -> String {
+        match &self.host() {
+            Some(h) => h.borrow().form_value(node, || self.markup_value(node)),
+            None => self.markup_value(node),
+        }
+    }
+
+    /// The default action of a click **without scripts**: a link navigates, a
+    /// submit button submits its form. With scripts this is the bindings'
+    /// business (`click_default_action`), and a browser must still follow links
+    /// on a page that has no JavaScript at all.
+    pub fn default_action(&self, node: NodeId) -> Option<NavRequest> {
+        if let Some(url) = self.closest_link(node) {
+            return Some(NavRequest::Load(url));
+        }
+        let (tag, kind) = self.control_at(node)?;
+        if tag == "input" && matches!(kind.as_str(), "checkbox" | "radio") {
+            return None;
+        }
+        let submits = (tag == "button" && kind != "button")
+            || (tag == "input" && matches!(kind.as_str(), "submit" | "image"));
+        if submits {
+            return self.form_action(self.ancestor_of(node, "form")?);
+        }
+        None
+    }
+
+    /// Where a form would be submitted to, with the values of its named
+    /// controls in the query string (`GET`; `POST` is reported as a problem by
+    /// the caller — we do not send request bodies yet).
+    pub fn form_action(&self, form: NodeId) -> Option<NavRequest> {
+        let action = self.dom.attr(form, "action").unwrap_or_default();
+        let base = if action.is_empty() {
+            self.url.clone()
+        } else {
+            Url::parse(&self.resolve_display(&action)).ok()?
+        };
+        let mut parts: Vec<String> = Vec::new();
+        for n in self.dom.descendants(form) {
+            let Some(name) = self.dom.attr(n, "name") else {
+                continue;
+            };
+            if name.is_empty() {
+                continue;
+            }
+            let tag = self.dom.tag(n).unwrap_or("");
+            let kind = self.dom.attr(n, "type").unwrap_or_else(|| "text".into());
+            match tag {
+                "input" if matches!(kind.as_str(), "checkbox" | "radio") => {
+                    if self.dom.has_attr(n, "checked") {
+                        let v = self.input_value(n);
+                        parts.push(format!(
+                            "{}={}",
+                            tb_net::percent_encode(&name),
+                            tb_net::percent_encode(if v.is_empty() { "on" } else { &v })
+                        ));
+                    }
+                }
+                "input" | "textarea" | "select" => {
+                    let v = self.input_value(n);
+                    parts.push(format!(
+                        "{}={}",
+                        tb_net::percent_encode(&name),
+                        tb_net::percent_encode(&v)
+                    ));
+                }
+                _ => (),
+            }
+        }
+        let mut url = base;
+        url.query = if parts.is_empty() {
+            None
+        } else {
+            Some(parts.join("&"))
+        };
+        url.fragment = None;
+        Some(NavRequest::Load(url.to_string()))
+    }
+
+    /// Every text run of the laid out page, in reading order — the base of
+    /// selection, find-in-page and the text renderer.
+    pub fn text_runs(&self) -> Vec<&tb_layout::TextRun> {
+        let Some(l) = &self.layout else {
+            return Vec::new();
+        };
+        let mut runs = Vec::new();
+        l.root.collect_runs(&mut runs);
+        runs.sort_by(|a, b| {
+            a.baseline
+                .partial_cmp(&b.baseline)
+                .unwrap_or(std::cmp::Ordering::Equal)
+                .then(a.x.partial_cmp(&b.x).unwrap_or(std::cmp::Ordering::Equal))
+        });
+        runs
+    }
+
+    /// The rectangles of the visible text runs, document coordinates — used to
+    /// paint a selection or a find highlight without re-measuring anything.
+    pub fn run_rects(&self) -> Vec<(Rect, String)> {
+        self.text_runs()
+            .into_iter()
+            .map(|r| {
+                let asc = r.style.font_size * 0.85;
+                (
+                    Rect::new(r.x, r.baseline - asc, r.width, r.style.line_box()),
+                    r.text.clone(),
+                )
+            })
+            .collect()
+    }
+
+    // ---------------------------------------------------------- tiny helpers --
+
+    /// `el.value` straight out of the markup (no script wrote one).
+    fn markup_value(&self, node: NodeId) -> String {
+        match self.dom.tag(node) {
+            Some("textarea") => self.dom.text_content(node),
+            Some("option") => self
+                .dom
+                .attr(node, "value")
+                .unwrap_or_else(|| self.dom.text_content(node).trim().to_string()),
+            Some("select") => {
+                let opts: Vec<NodeId> = self
+                    .dom
+                    .descendants(node)
+                    .into_iter()
+                    .filter(|n| self.dom.tag(*n) == Some("option"))
+                    .collect();
+                opts.iter()
+                    .find(|o| self.dom.has_attr(**o, "selected"))
+                    .or_else(|| opts.first())
+                    .map(|o| self.markup_value(*o))
+                    .unwrap_or_default()
+            }
+            _ => self.dom.attr(node, "value").unwrap_or_default(),
+        }
+    }
+
+    fn ancestor_of(&self, node: NodeId, tag: &str) -> Option<NodeId> {
+        let mut cur = self.dom.parent(node);
+        while let Some(c) = cur {
+            if self.dom.tag(c) == Some(tag) {
+                return Some(c);
+            }
+            cur = self.dom.parent(c);
+        }
+        None
+    }
+
+    /// Resolve an `href` the way `a.href` does: absolute, no `#`-stripping,
+    /// `about:`/`mailto:` keep their scheme.
+    pub fn resolve_display(&self, raw: &str) -> String {
+        let raw = raw.trim();
+        if raw.is_empty() {
+            return self.url.to_string();
+        }
+        Url::join(&self.url, raw)
+            .ok()
+            .or_else(|| self.loader.borrow().resolve(raw))
+            .map(|u| u.to_string())
+            .unwrap_or_else(|| raw.to_string())
+    }
+
     // --------------------------------------------------------------- render -
 
     /// Paint the page (cached — a re-layout drops the cache).
@@ -558,16 +1147,22 @@ impl Page {
 
     pub fn paint(&mut self, opts: &PaintOptions) -> Framebuffer {
         let started = std::time::Instant::now();
-        let fb = match self.layout.clone() {
-            Some(layout) => paint_with_images(&layout, &self.dom, opts, &self.image_nodes),
+        let fb = self.paint_view(opts);
+        self.timings.render += started.elapsed().as_secs_f64() * 1000.0;
+        fb
+    }
+
+    /// Paint without touching the timings — a GUI repaints dozens of times per
+    /// second and must not book all of it against one page load.
+    pub fn paint_view(&self, opts: &PaintOptions) -> Framebuffer {
+        match &self.layout {
+            Some(layout) => paint_with_images(layout, &self.dom, opts, &self.image_nodes),
             // no box tree: a blank canvas of viewport size still says "rendered"
             None => Framebuffer::new(
                 self.config.viewport.width.max(1.0) as u32,
                 self.config.viewport.height.max(1.0) as u32,
             ),
-        };
-        self.timings.render += started.elapsed().as_secs_f64() * 1000.0;
-        fb
+        }
     }
 
     /// Write a PNG with our own encoder; returns the number of bytes written.
@@ -610,6 +1205,12 @@ impl Page {
 
     pub fn has_js(&self) -> bool {
         self.js.is_some()
+    }
+
+    /// The document's mutation counter: style, layout and pictures are only
+    /// worth redoing when this changed. A UI caches its paint on it.
+    pub fn document_version(&self) -> u64 {
+        self.host().map(|h| h.borrow().version()).unwrap_or(0)
     }
 
     pub fn host(&self) -> Option<Rc<RefCell<Host>>> {
@@ -701,8 +1302,9 @@ impl Page {
         self.restyle_and_layout();
     }
 
-    /// Re-run style and layout on the current DOM.
-    pub(crate) fn restyle_and_layout(&mut self) {
+    /// Re-run style and layout on the current DOM. Public because a theme or
+    /// `prefers-color-scheme` change has to force it.
+    pub fn restyle_and_layout(&mut self) {
         let started = std::time::Instant::now();
         let sheets = crate::engine::assemble_sheets(&self.dom, &self.external_sheets());
         let viewport = tb_style::Viewport {

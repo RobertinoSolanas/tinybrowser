@@ -45,12 +45,27 @@ SWITCHES:
     --serve DIR        serve DIR on 127.0.0.1 (for demos and tests)
     --help, -h         this text
 
+GUI (a window you can click and type in):
+    --ui               open the browser: tabs, address bar, mouse, keyboard
+    --ui-backend KIND  auto (default) | x11 | term | headless
+    --theme NAME       light | dark
+    --zoom N           GUI zoom, device px per CSS px (default 1)
+    --new-tab URL      open a second tab (repeatable)
+    --home URL         start page and the `H` key
+    --search-url URL   search template for the address bar (`{}` = query)
+    --bookmarks FILE   bookmark file ('' to keep none)
+    --hover-css        restyle on mouse-over (pretty, slower on big pages)
+    --no-chrome        no tab strip, toolbar, bookmarks or status line
+    --ui-script FILE   drive the GUI from a script (see README, headless)
+
 EXAMPLES:
     tiny https://example.com
     tiny --text https://example.com
     tiny --links --console https://taz.de
     tiny --screenshot /tmp/taz.png --full-height https://taz.de
     tiny --repl fixtures/taz.de.html
+    tiny --ui https://example.com
+    tiny --ui-backend term --theme dark https://taz.de
 ";
 
 /// Parsed command line.
@@ -80,6 +95,17 @@ pub struct Args {
     pub quiet: bool,
     pub repl: bool,
     pub serve: Option<PathBuf>,
+    pub ui: bool,
+    pub ui_backend: String,
+    pub theme: String,
+    pub zoom: f32,
+    pub new_tab: Vec<String>,
+    pub home: Option<String>,
+    pub search_url: Option<String>,
+    pub bookmarks: Option<PathBuf>,
+    pub hover_css: bool,
+    pub no_chrome: bool,
+    pub ui_script: Option<PathBuf>,
 }
 
 impl Default for Args {
@@ -109,6 +135,17 @@ impl Default for Args {
             quiet: false,
             repl: false,
             serve: None,
+            ui: false,
+            ui_backend: "auto".to_string(),
+            theme: "light".to_string(),
+            zoom: 1.0,
+            new_tab: Vec::new(),
+            home: None,
+            search_url: None,
+            bookmarks: None,
+            hover_css: false,
+            no_chrome: false,
+            ui_script: None,
         }
     }
 }
@@ -164,6 +201,9 @@ pub fn main() -> ExitCode {
 fn run(args: &Args) -> ExitCode {
     if let Some(dir) = &args.serve {
         return serve(dir);
+    }
+    if args.ui {
+        return gui(args);
     }
     let Some(input) = &args.input else {
         eprint!("{USAGE}");
@@ -362,6 +402,141 @@ fn repl(args: &Args, browser: &mut Engine, page: &mut Page) {
     println!();
 }
 
+/// `--ui`: open the browser — a window with tabs, an address bar, a pointer and
+/// a keyboard.
+///
+/// `auto` prefers X11 when `$DISPLAY` is set and falls back to the terminal;
+/// with neither, the run is refused rather than showing nothing.
+fn gui(args: &Args) -> ExitCode {
+    use std::io::IsTerminal;
+    use tb_ui::{render, App, Event, Theme, UiConfig};
+
+    let mut cfg = UiConfig::default();
+    cfg.scale = args.zoom.clamp(0.25, 4.0);
+    cfg.show_chrome = !args.no_chrome;
+    cfg.run_scripts = !args.no_js;
+    cfg.apply_css = !args.no_css;
+    cfg.fetch = !args.no_net;
+    cfg.timeout_ms = args.timeout_ms;
+    cfg.hover_css = args.hover_css;
+    if let Some(home) = &args.home {
+        cfg.home = home.clone();
+    }
+    if let Some(search) = &args.search_url {
+        cfg.search_url = search.clone();
+    }
+    if let Some(file) = &args.bookmarks {
+        cfg.bookmark_file = Some(file.clone());
+    }
+    let theme = match args.theme.to_ascii_lowercase().as_str() {
+        "dark" => Theme::dark(),
+        "light" => Theme::light(),
+        other => {
+            eprintln!("tiny: unknown theme {other:?} (light or dark)");
+            return ExitCode::from(2);
+        }
+    };
+
+    let mut urls: Vec<String> = Vec::new();
+    if let Some(input) = &args.input {
+        urls.push(input.clone());
+    }
+    urls.extend(args.new_tab.iter().cloned());
+
+    // `--width`/`--height` are CSS pixels; a window is measured in device pixels
+    let width = ((args.width.max(320.0) * args.zoom) as u32).max(320);
+    let height = ((args.height.max(200.0) * args.zoom) as u32).max(200);
+    let mut app = App::new(cfg, theme, width, height, &urls);
+
+    if let Some(path) = &args.ui_script {
+        return script(&mut app, path);
+    }
+
+    let backend = args.ui_backend.to_ascii_lowercase();
+    let display = std::env::var("DISPLAY").unwrap_or_default();
+    if matches!(backend.as_str(), "auto" | "x11") && !display.is_empty() {
+        match tb_x11::browse(&mut app) {
+            Ok(()) => return ExitCode::SUCCESS,
+            Err(e) => {
+                if backend == "x11" {
+                    eprintln!("tiny: {e}");
+                    return ExitCode::from(1);
+                }
+                eprintln!("tiny: no X11 window ({e}); trying the terminal");
+            }
+        }
+    }
+    match backend.as_str() {
+        "auto" | "term" => {
+            if !std::io::stdin().is_terminal() {
+                eprintln!(
+                    "tiny: --ui needs a terminal or an X display; \
+                     try --ui-backend headless or a --ui-script"
+                );
+                return ExitCode::from(1);
+            }
+            match tb_term::browse(&mut app) {
+                Ok(()) => ExitCode::SUCCESS,
+                Err(e) => {
+                    eprintln!("tiny: {e}");
+                    ExitCode::from(1)
+                }
+            }
+        }
+        "headless" => {
+            // No display at all: paint once and print what the window would
+            // have shown. `--ui-script` is the version of this that a test can
+            // drive.
+            for _ in 0..8 {
+                app.on_event(Event::Tick);
+            }
+            print!("{}", render::paint_screen(&app).dump());
+            ExitCode::SUCCESS
+        }
+        "x11" => {
+            eprintln!("tiny: --ui-backend x11 needs DISPLAY set");
+            ExitCode::from(1)
+        }
+        other => {
+            eprintln!("tiny: unknown --ui-backend {other:?} (auto, x11, term, headless)");
+            ExitCode::from(2)
+        }
+    }
+}
+
+/// `--ui-script`: drive the same GUI with events from a file and print what the
+/// script asks for. It is how the GUI is tested, and how a demo is repeated.
+fn script(app: &mut tb_ui::App, path: &Path) -> ExitCode {
+    let text = match std::fs::read_to_string(path) {
+        Ok(t) => t,
+        Err(e) => {
+            eprintln!("tiny: cannot read {}: {e}", path.display());
+            return ExitCode::from(2);
+        }
+    };
+    for line in text.lines() {
+        let line = line.trim();
+        if line.is_empty() || line.starts_with('#') {
+            continue;
+        }
+        // a browser command (open, back, newtab, …) is not an input event
+        if tb_ui::backend::script_command(app, line) {
+            continue;
+        }
+        // an output verb prints the app's state right here, in script order
+        if let Some(out) = tb_ui::backend::script_output(app, line) {
+            if !out.is_empty() {
+                println!("{out}");
+            }
+            continue;
+        }
+        for ev in tb_ui::backend::parse_script(line) {
+            app.on_event(ev);
+        }
+    }
+    ExitCode::SUCCESS
+}
+
 /// Serve a directory on 127.0.0.1 — enough for a demo (`--serve .` and then
 /// `tiny --links http://127.0.0.1:PORT/`).
 fn serve(dir: &Path) -> ExitCode {
@@ -489,6 +664,20 @@ pub fn parse(argv: &[String]) -> Result<Args, String> {
             "--quiet" | "-q" => a.quiet = true,
             "--repl" => a.repl = true,
             "--serve" => a.serve = Some(PathBuf::from(next("a directory")?)),
+            "--ui" => a.ui = true,
+            "--ui-backend" => a.ui_backend = next("x11, term or headless")?,
+            "--theme" => a.theme = next("light or dark")?,
+            "--zoom" => a.zoom = number("a zoom factor")? as f32,
+            "--new-tab" => a.new_tab.push(next("a URL")?),
+            "--home" => a.home = Some(next("a URL")?),
+            "--search-url" => a.search_url = Some(next("a template")?),
+            "--bookmarks" => a.bookmarks = Some(PathBuf::from(next("a file name")?)),
+            "--hover-css" => a.hover_css = true,
+            "--no-chrome" => a.no_chrome = true,
+            "--ui-script" => {
+                a.ui_script = Some(PathBuf::from(next("a script file")?));
+                a.ui = true;
+            }
             other if other.starts_with('-') => return Err(format!("unknown option {other}")),
             _ => {
                 if a.input.is_some() {

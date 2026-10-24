@@ -1,0 +1,16 @@
+[package]
+name = "tb-x11"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+description = "X11 client written from scratch: window, input, PutImage — no x11rb"
+
+[dependencies]
+tb-core = { workspace = true }
+tb-gfx = { workspace = true }
+tb-ui = { workspace = true }
+
+[lints.rust]
+unsafe_code = "forbid"

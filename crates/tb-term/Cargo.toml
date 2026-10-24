@@ -1,0 +1,11 @@
+[package]
+name = "tb-term"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Terminal front end for tiny: raw-mode escape sequences, no C bindings"
+
+[dependencies]
+tb-core = { workspace = true }
+tb-gfx = { workspace = true }
+tb-ui = { workspace = true }

@@ -17,6 +17,9 @@ tb-browser.workspace = true
 tb-net.workspace = true
 tb-dom.workspace = true
 tb-gfx.workspace = true
+tb-ui.workspace = true
+tb-term.workspace = true
+tb-x11.workspace = true
 
 [dev-dependencies]
 tb-testkit.workspace = true
